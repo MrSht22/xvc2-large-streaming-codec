@@ -36,6 +36,15 @@ xvc2-codec-smoke
 xvc2-codec-smoke --config configs/codec_63m.yaml
 ```
 
+在已有 `ctc-gop` 环境中先运行：
+
+```bash
+xvc2-codec-env-check --require-cuda
+```
+
+只有输出 `ctc_gop_codec_environment=PASS` 才可直接复用。该检查覆盖 Torch、torchaudio、
+PyYAML、二进制版本匹配、STFT API 和 CUDA 可见性。
+
 ## Manifest
 
 Source manifest 每行：
@@ -59,6 +68,33 @@ Pair manifest 每行：
 
 `student_hidden.pt` 可以直接存 Tensor，或使用 `{"student_hidden": Tensor}`。其它缓存同理。
 `speaker_target_path` 是必需项；phone/dyn/prosody anchor cache 是可选项。
+
+正式训练前执行真实 cache 审计：
+
+```bash
+xvc2-codec-audit \
+  --config configs/codec_63m.yaml \
+  --source-manifest /path/codec_source_train_manifest.jsonl \
+  --pair-manifest /path/sa_pairs_manifest.jsonl \
+  --speaker-target-dim 256
+```
+
+它会读取音频和 Tensor，验证 `[T,768]` Student cache、speaker target、可选 anchor
+维度、音频/cache 50 Hz 对齐以及每个 pair 的 source/SA 完整性。
+
+## 资源 Benchmark
+
+```bash
+CUDA_VISIBLE_DEVICES=0 xvc2-codec-benchmark \
+  --config configs/codec_63m.yaml --batch-size 1 --audio-seconds 3.2
+
+CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
+  -m xvc2_codec.benchmark \
+  --config configs/codec_63m.yaml --batch-size 1 --audio-seconds 3.2
+```
+
+默认同时执行 Generator reconstruction/GAN/FM 和 Discriminator 更新，输出 step time、
+global audio seconds/second 与每 rank 峰值显存。`--no-with-discriminator` 可单独测 warm-up。
 
 ## 统一训练
 
@@ -95,4 +131,3 @@ Checkpoint 保存 generator、训练期 style head、discriminator、两个 opti
 - 默认只有 complex multi-scale STFT discriminator，没有 MPD。
 - 正式大训练前仍需服务器 2-step DDP smoke、显存/吞吐 benchmark、32-item overfit 和
   full/chunk/reset/flush acceptance。
-

@@ -13,6 +13,9 @@ dependencies = ["PyYAML>=6.0", "torch>=2.4", "torchaudio>=2.4"]
 dev = ["pytest>=8", "ruff>=0.12"]
 
 [project.scripts]
+xvc2-codec-audit = "xvc2_codec.audit:main"
+xvc2-codec-benchmark = "xvc2_codec.benchmark:main"
+xvc2-codec-env-check = "xvc2_codec.env_check:main"
 xvc2-codec-train = "xvc2_codec.train:main"
 xvc2-codec-smoke = "xvc2_codec.smoke:main"
 
