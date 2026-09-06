@@ -1,0 +1,30 @@
+fields:
+  provenance:
+    detail_level: detailed
+    description: Paper, challenge edition, repository, commit, and lineage.
+  architecture:
+    detail_level: detailed
+    description: Input representations, anonymization operation, and resynthesis path.
+  model_assets:
+    detail_level: detailed
+    description: Checkpoint role, public access, size, checksum, and extracted path.
+  deployment:
+    detail_level: detailed
+    description: Python, CUDA, PyTorch, system packages, entry point, and offline operation.
+  mapping_policy:
+    detail_level: detailed
+    description: Speaker or utterance level, seed control, persistence, and determinism.
+  pair_alignment:
+    detail_level: detailed
+    description: Sample rate, duration preservation, ordering, coverage, and failures.
+  reproducibility:
+    detail_level: detailed
+    description: Tested commands, expected output, reference results, and known issues.
+  licensing:
+    detail_level: moderate
+    description: Code, models, datasets, generated audio, and citation obligations.
+uncertain:
+  - Official 2022 B1 checkpoint checksums are unavailable without organizer credentials.
+  - Public v2.0 neural checkpoint archives do not publish upstream SHA256 values.
+  - Neural output duration is not guaranteed to be sample-identical to input.
+

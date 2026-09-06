@@ -1,0 +1,21 @@
+topic: VoicePrivacy 2022 speaker anonymization deployment
+items:
+  - name: VoicePrivacy 2022 B1.a
+    scope: official_challenge_baseline
+  - name: VoicePrivacy 2022 B1.b
+    scope: official_challenge_baseline
+  - name: VoicePrivacy 2022 B2 McAdams
+    scope: official_challenge_baseline
+  - name: T04 phonetic STTTS-GAN
+    scope: challenge_submission_cited_by_overview
+  - name: Prosody Is Not Identity
+    scope: post_evaluation_t04_successor
+  - name: VoicePAT
+    scope: third_party_python_toolkit
+  - name: VoicePrivacy 2026 B2 and B3
+    scope: official_maintained_successor
+execution:
+  batch_size: 1
+  items_per_agent: 7
+  output_dir: results
+

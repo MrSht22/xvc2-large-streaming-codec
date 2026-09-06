@@ -1,0 +1,4 @@
+git+https://github.com/One-sixth/fairseq.git
+# PyTorch, torchvision, and torchaudio are installed via 00_install.sh
+# Using PyTorch 2.0.1+cu117 (or newer) as specified in the main installation script
+amfm_decompy

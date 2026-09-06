@@ -1,0 +1,18 @@
+name: voiceprivacy-sa
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - setuptools
+  - wheel
+  - ffmpeg
+  - libsndfile
+  - portaudio
+  - autoconf
+  - automake
+  - libtool
+  - pkg-config
+  - make
+  - gcc_linux-64
+  - gxx_linux-64

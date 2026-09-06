@@ -1,0 +1,137 @@
+#!/bin/bash
+
+set -e
+
+source env.sh
+
+
+# Define language codes and their download URLs
+declare -A lang_urls=(
+    ["en"]="https://duke.app.box.com/shared/static/qk49dcwnr0lzobk0ptdf4a3suypsyuq9"
+    ["de"]="https://duke.app.box.com/shared/static/3wmia60yrda6kp2a1kedsoogqndiz5en"
+    ["ja"]="https://duke.app.box.com/shared/static/prs19enmi8dblylzm2fhsmp2rpjybkwj"
+    ["cn"]="https://duke.app.box.com/shared/static/h912rd8jzzh13ywqvsi9yk78zwf1zi3x"
+    ["fr"]="https://duke.app.box.com/shared/static/vxpoiyl0wfz9le31ieyby3qoonj2m8es"
+    ["es"]="https://duke.app.box.com/shared/static/eu5f2zhaui11h6cnwxl1x3z3fty1gx72"
+)
+
+# Check if all language directories exist
+all_exist=true
+for lang in de ja cn fr es en; do
+    if [ ! -d "corpora/$lang" ]; then
+        all_exist=false
+        break
+    fi
+done
+
+
+# Download MLS for each language
+if [ "$all_exist" = false ]; then
+    echo "Download MLS for languages: de, ja, cn, fr, es, en..."
+    mkdir -p corpora
+    cd corpora
+    
+    for lang in de ja cn fr es en; do
+        lang_dir="$lang"
+        lang_file="${lang}.zip"
+        lang_url="${lang_urls[$lang]}"
+        
+        # Skip if directory already exists
+        if [ -d "$lang_dir" ]; then
+            echo "Directory corpora/$lang_dir already exists, skipping $lang"
+            continue
+        fi
+        
+        # Download if file doesn't exist
+        if [ ! -f "$lang_file" ]; then
+            echo "Downloading $lang..."
+            wget -O "$lang_file" "$lang_url"
+        else
+            echo "File $lang_file already exists, skipping download for $lang"
+        fi
+        
+        # Extract the archive
+        if [ -f "$lang_file" ]; then
+            echo "Unpacking $lang..."
+            # unzip
+            if unzip -q "$lang_file" 2>/dev/null; then
+                echo "Successfully extracted $lang using unzip"
+                
+                # Organize extracted files into language directory
+                # Check if the language directory already exists (created by extraction)
+                if [ ! -d "$lang_dir" ]; then
+                    # Find the extracted directory or files
+                    extracted_dirs=$(find . -maxdepth 1 -type d ! -name . ! -name "$lang_dir" ! -name "*.zip" | head -1)
+                    if [ ! -z "$extracted_dirs" ]; then
+                        # Rename the extracted directory to language code
+                        mv "$extracted_dirs" "$lang_dir"
+                        echo "Renamed extracted directory to $lang_dir"
+                    else
+                        # If no directory was created, create one and move files
+                        mkdir -p "$lang_dir"
+                        find . -maxdepth 1 -type f ! -name "$lang_file" ! -name "*.zip" -exec mv {} "$lang_dir/" \; 2>/dev/null || true
+                        find . -maxdepth 1 -type d ! -name . ! -name "$lang_dir" ! -name "*.zip" -exec mv {} "$lang_dir/" \; 2>/dev/null || true
+                        echo "Created $lang_dir and moved extracted files"
+                    fi
+                fi
+            else
+                echo "Warning: Could not extract $lang_file. Please check the file format."
+                continue
+            fi
+        fi
+    done
+    
+    cd ../
+fi
+
+model=asv_ssl
+if [ ! -d "exp/$model" ]; then
+    mkdir -p exp
+    cd exp
+    if [ ! -f .${model}.zip ]; then
+        echo "Download pretrained $model models pre-trained..."
+        wget -O ${model}.zip https://duke.app.box.com/shared/static/wo07rwi5xcgam1v6qlzfnzb536rqug14
+        mv ${model}.zip .${model}.zip
+    fi
+    echo "Unpacking pretrained evaluation models"
+    unzip .${model}.zip
+    cd ../
+fi
+
+check_data=data/en_dev_enrolls
+if [ ! -d $check_data ]; then
+    if  [ ! -f .mls_langs.zip ]; then
+        echo "Download MLS kaldi format datadir..."
+        wget -O mls_langs.zip https://duke.app.box.com/shared/static/4e5rtbtaloyriln58zm7bcnosuwamyn5
+        mv mls_langs.zip .mls_langs.zip
+    fi
+    echo "Unpacking .mls_langs.zip"
+    unzip .mls_langs.zip
+fi
+
+
+
+# Train data URLs (chinese, japanese; add english/german/spanish/french as needed)
+declare -A train_urls=(
+    ["english"]="https://duke.app.box.com/shared/static/l4tkryb5w140da11n56ijd2tccdr8ajn"
+    ["german"]="https://duke.app.box.com/shared/static/5r3s0bzczdiiosycqy368k6sa0jsguu3"
+    ["spanish"]="https://duke.app.box.com/shared/static/e99rs57lw74tracwfzxikfe8z4lnafj5"
+    ["french"]="https://duke.app.box.com/shared/static/xr34gltyhpiue440fi1o0jlllgt7odgp"
+)
+
+check_data=data/train_english
+if [ ! -d "$check_data" ]; then
+    mkdir -p data
+    cd data
+    for lang in english german spanish french; do
+        [ -z "${train_urls[$lang]:-}" ] && continue
+        if [ ! -f ".${lang}.zip" ]; then
+            echo "Download ${lang}..."
+            wget -O "${lang}.zip" "${train_urls[$lang]}"
+            mv "${lang}.zip" ".${lang}.zip"
+        fi
+        echo "Unpacking .${lang}.zip"
+        unzip -q ".${lang}.zip"
+    done
+    cd ..
+fi

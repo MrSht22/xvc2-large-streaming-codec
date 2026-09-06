@@ -9,4 +9,7 @@ build/
 runs/
 data/
 checkpoints/
-
+sa_generation/models/
+sa_generation/model_archives/
+sa_generation/artifacts/
+sa_generation/nltk_data/

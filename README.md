@@ -45,6 +45,16 @@ xvc2-codec-env-check --require-cuda
 只有输出 `ctc_gop_codec_environment=PASS` 才可直接复用。该检查覆盖 Torch、torchaudio、
 PyYAML、二进制版本匹配、STFT API 和 CUDA 可见性。
 
+## SA 配对数据生成
+
+`sa_generation/` 固定复现此前使用的 VoicePrivacy STTTS 数据生成流程，并使用独立的
+`voiceprivacy-sa` Conda 环境，不污染 Codec 或 `ctc-gop` 环境。它包含固定上游源码、
+模型完整性检查、单条/批量生成、按 speaker 分片的多 GPU launcher，以及中断恢复器。
+
+新服务器从 [sa_generation/NEW_SERVER_RUNBOOK.md](sa_generation/NEW_SERVER_RUNBOOK.md)
+开始。必须依次通过环境审计、单条真实推理和 20 条 pilot，之后才能提交大规模 SA 生成。
+模型权重、NLTK 数据、运行缓存、生成 WAV 和日志不进入 Git。
+
 ## Manifest
 
 Source manifest 每行：

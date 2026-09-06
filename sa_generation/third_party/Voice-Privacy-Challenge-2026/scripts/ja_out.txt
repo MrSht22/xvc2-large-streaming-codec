@@ -1,0 +1,672 @@
+
+================================================================================
+STEP 1: COLLECTING DATA FROM BOTH SUBSETS
+================================================================================
+
+================================================================================
+PROCESSING NONPARA30
+================================================================================
+Found 100 nonpara30 directories
+  Loaded 50 transcripts from jvs093
+  Loaded 50 transcripts from jvs028
+  Loaded 50 transcripts from jvs031
+  Loaded 50 transcripts from jvs033
+  Loaded 50 transcripts from jvs035
+  Loaded 50 transcripts from jvs088
+  Loaded 50 transcripts from jvs020
+  Loaded 50 transcripts from jvs081
+  Loaded 50 transcripts from jvs092
+  Loaded 50 transcripts from jvs083
+  Loaded 50 transcripts from jvs095
+  Loaded 50 transcripts from jvs079
+  Loaded 50 transcripts from jvs037
+  Loaded 50 transcripts from jvs053
+  Loaded 50 transcripts from jvs005
+  Loaded 50 transcripts from jvs045
+  Loaded 50 transcripts from jvs025
+  Loaded 50 transcripts from jvs072
+  Loaded 50 transcripts from jvs098
+  Loaded 50 transcripts from jvs041
+  Loaded 50 transcripts from jvs018
+  Loaded 50 transcripts from jvs021
+  Loaded 50 transcripts from jvs090
+  Loaded 50 transcripts from jvs062
+  Loaded 50 transcripts from jvs057
+  Loaded 50 transcripts from jvs073
+  Loaded 50 transcripts from jvs027
+  Loaded 50 transcripts from jvs055
+  Loaded 50 transcripts from jvs009
+  Loaded 50 transcripts from jvs004
+  Loaded 50 transcripts from jvs069
+  Loaded 50 transcripts from jvs091
+  Loaded 50 transcripts from jvs094
+  Loaded 50 transcripts from jvs049
+  Loaded 50 transcripts from jvs054
+  Loaded 50 transcripts from jvs074
+  Loaded 50 transcripts from jvs010
+  Loaded 50 transcripts from jvs015
+  Loaded 50 transcripts from jvs022
+  Loaded 50 transcripts from jvs077
+  Loaded 50 transcripts from jvs061
+  Loaded 50 transcripts from jvs085
+  Loaded 50 transcripts from jvs056
+  Loaded 50 transcripts from jvs067
+  Loaded 50 transcripts from jvs036
+  Loaded 50 transcripts from jvs071
+  Loaded 50 transcripts from jvs038
+  Loaded 50 transcripts from jvs058
+  Loaded 50 transcripts from jvs046
+  Loaded 50 transcripts from jvs040
+  Loaded 50 transcripts from jvs099
+  Loaded 50 transcripts from jvs017
+  Loaded 50 transcripts from jvs080
+  Loaded 50 transcripts from jvs032
+  Loaded 50 transcripts from jvs001
+  Loaded 50 transcripts from jvs030
+  Loaded 50 transcripts from jvs019
+  Loaded 50 transcripts from jvs023
+  Loaded 50 transcripts from jvs096
+  Loaded 50 transcripts from jvs003
+  Loaded 50 transcripts from jvs075
+  Loaded 50 transcripts from jvs008
+  Loaded 50 transcripts from jvs050
+  Loaded 50 transcripts from jvs082
+  Loaded 50 transcripts from jvs042
+  Loaded 50 transcripts from jvs059
+  Loaded 50 transcripts from jvs078
+  Loaded 50 transcripts from jvs047
+  Loaded 50 transcripts from jvs006
+  Loaded 50 transcripts from jvs043
+  Loaded 50 transcripts from jvs089
+  Loaded 50 transcripts from jvs011
+  Loaded 50 transcripts from jvs044
+  Loaded 50 transcripts from jvs064
+  Loaded 50 transcripts from jvs007
+  Loaded 50 transcripts from jvs002
+  Loaded 50 transcripts from jvs039
+  Loaded 50 transcripts from jvs084
+  Loaded 50 transcripts from jvs060
+  Loaded 50 transcripts from jvs016
+  Loaded 50 transcripts from jvs068
+  Loaded 50 transcripts from jvs086
+  Loaded 50 transcripts from jvs097
+  Loaded 50 transcripts from jvs063
+  Loaded 50 transcripts from jvs066
+  Loaded 50 transcripts from jvs014
+  Loaded 50 transcripts from jvs029
+  Loaded 50 transcripts from jvs024
+  Loaded 50 transcripts from jvs076
+  Loaded 50 transcripts from jvs012
+  Loaded 50 transcripts from jvs026
+  Loaded 50 transcripts from jvs100
+  Loaded 50 transcripts from jvs052
+  Loaded 50 transcripts from jvs034
+  Loaded 50 transcripts from jvs070
+  Loaded 50 transcripts from jvs051
+  Loaded 50 transcripts from jvs087
+  Loaded 50 transcripts from jvs013
+  Loaded 50 transcripts from jvs065
+  Loaded 50 transcripts from jvs048
+  Total transcripts from nonpara30: 5000
+  Total audio files from nonpara30: 3000
+  Speakers in nonpara30: 100
+
+================================================================================
+PROCESSING PARALLEL100
+================================================================================
+Found 100 parallel100 directories
+  Loaded 100 transcripts from jvs093
+  Loaded 100 transcripts from jvs028
+  Loaded 100 transcripts from jvs031
+  Loaded 100 transcripts from jvs033
+  Loaded 100 transcripts from jvs035
+  Loaded 100 transcripts from jvs088
+  Loaded 100 transcripts from jvs020
+  Loaded 100 transcripts from jvs081
+  Loaded 100 transcripts from jvs092
+  Loaded 100 transcripts from jvs083
+  Loaded 100 transcripts from jvs095
+  Loaded 100 transcripts from jvs079
+  Loaded 100 transcripts from jvs037
+  Loaded 100 transcripts from jvs053
+  Loaded 100 transcripts from jvs005
+  Loaded 100 transcripts from jvs045
+  Loaded 100 transcripts from jvs025
+  Loaded 100 transcripts from jvs072
+  Loaded 100 transcripts from jvs098
+  Loaded 100 transcripts from jvs041
+  Loaded 100 transcripts from jvs018
+  Loaded 100 transcripts from jvs021
+  Loaded 100 transcripts from jvs090
+  Loaded 100 transcripts from jvs062
+  Loaded 100 transcripts from jvs057
+  Loaded 100 transcripts from jvs073
+  Loaded 100 transcripts from jvs027
+  Loaded 100 transcripts from jvs055
+  Loaded 100 transcripts from jvs009
+  Loaded 100 transcripts from jvs004
+  Loaded 100 transcripts from jvs069
+  Loaded 100 transcripts from jvs091
+  Loaded 100 transcripts from jvs094
+  Loaded 100 transcripts from jvs049
+  Loaded 100 transcripts from jvs054
+  Loaded 100 transcripts from jvs074
+  Loaded 100 transcripts from jvs010
+  Loaded 100 transcripts from jvs015
+  Loaded 100 transcripts from jvs022
+  Loaded 100 transcripts from jvs077
+  Loaded 100 transcripts from jvs061
+  Loaded 100 transcripts from jvs085
+  Loaded 100 transcripts from jvs056
+  Loaded 100 transcripts from jvs067
+  Loaded 100 transcripts from jvs036
+  Loaded 100 transcripts from jvs071
+  Loaded 100 transcripts from jvs038
+  Loaded 100 transcripts from jvs058
+  Loaded 100 transcripts from jvs046
+  Loaded 100 transcripts from jvs040
+  Loaded 100 transcripts from jvs099
+  Loaded 100 transcripts from jvs017
+  Loaded 100 transcripts from jvs080
+  Loaded 100 transcripts from jvs032
+  Loaded 100 transcripts from jvs001
+  Loaded 100 transcripts from jvs030
+  Loaded 100 transcripts from jvs019
+  Loaded 100 transcripts from jvs023
+  Loaded 100 transcripts from jvs096
+  Loaded 100 transcripts from jvs003
+  Loaded 100 transcripts from jvs075
+  Loaded 100 transcripts from jvs008
+  Loaded 100 transcripts from jvs050
+  Loaded 100 transcripts from jvs082
+  Loaded 100 transcripts from jvs042
+  Loaded 100 transcripts from jvs059
+  Loaded 100 transcripts from jvs078
+  Loaded 100 transcripts from jvs047
+  Loaded 100 transcripts from jvs006
+  Loaded 100 transcripts from jvs043
+  Loaded 100 transcripts from jvs089
+  Loaded 100 transcripts from jvs011
+  Loaded 100 transcripts from jvs044
+  Loaded 100 transcripts from jvs064
+  Loaded 100 transcripts from jvs007
+  Loaded 100 transcripts from jvs002
+  Loaded 100 transcripts from jvs039
+  Loaded 100 transcripts from jvs084
+  Loaded 100 transcripts from jvs060
+  Loaded 100 transcripts from jvs016
+  Loaded 100 transcripts from jvs068
+  Loaded 100 transcripts from jvs086
+  Loaded 100 transcripts from jvs097
+  Loaded 100 transcripts from jvs063
+  Loaded 100 transcripts from jvs066
+  Loaded 100 transcripts from jvs014
+  Loaded 100 transcripts from jvs029
+  Loaded 100 transcripts from jvs024
+  Loaded 100 transcripts from jvs076
+  Loaded 100 transcripts from jvs012
+  Loaded 100 transcripts from jvs026
+  Loaded 100 transcripts from jvs100
+  Loaded 100 transcripts from jvs052
+  Loaded 100 transcripts from jvs034
+  Loaded 100 transcripts from jvs070
+  Loaded 100 transcripts from jvs051
+  Loaded 100 transcripts from jvs087
+  Loaded 100 transcripts from jvs013
+  Loaded 100 transcripts from jvs065
+  Loaded 100 transcripts from jvs048
+  Total transcripts from parallel100: 10000
+  Total audio files from parallel100: 9997
+  Speakers in parallel100: 100
+
+================================================================================
+COMMON SPEAKERS
+================================================================================
+Speakers in nonpara30: 100
+Speakers in parallel100: 100
+Common speakers (present in BOTH subsets): 100
+nonpara30 (filtered to common speakers): 5000 transcripts, 3000 audio files
+parallel100 (filtered to common speakers): 10000 transcripts, 9997 audio files
+
+================================================================================
+MERGED DATA (for speaker selection)
+================================================================================
+Total transcripts: 15000
+Total audio files: 12997
+
+Warning: 2003 utterances in transcripts have no corresponding audio files
+  Sample missing utterances: ['jvs001_BASIC5000_0260', 'jvs001_BASIC5000_0296', 'jvs001_BASIC5000_0927', 'jvs001_BASIC5000_0945', 'jvs001_BASIC5000_1050', 'jvs001_BASIC5000_1307', 'jvs001_BASIC5000_1375', 'jvs001_BASIC5000_1721', 'jvs001_BASIC5000_2556', 'jvs001_BASIC5000_2599']
+  ... and 1993 more
+
+Loaded gender information for 100 speakers from ../corpora/ja/gender_f0range.txt
+Speakers in spk2utt: 100
+Speakers with gender info: 100
+Sample speaker IDs in spk2utt: ['jvs001', 'jvs002', 'jvs003', 'jvs004', 'jvs005']
+Sample speaker IDs in gender map: ['jvs001', 'jvs002', 'jvs003', 'jvs004', 'jvs005']
+
+Gender distribution in spk2utt:
+  Male: 49
+  Female: 51
+  Unknown/Missing: 0
+
+After filtering (min_utterances=2):
+  Male speakers: 49
+  Female speakers: 51
+
+================================================================================
+RANDOM SPLIT INTO DEV AND TEST (seed=123)
+================================================================================
+
+================================================================================
+DEV SET - FEMALE SPEAKERS (24)
+================================================================================
+Rank   Speaker ID      Utterances   Global Rank 
+--------------------------------------------------
+1      jvs059          130          29          
+2      jvs035          130          17          
+3      jvs018          130          10          
+4      jvs064          130          34          
+5      jvs061          130          31          
+6      jvs024          130          12          
+7      jvs090          130          44          
+8      jvs038          130          19          
+9      jvs060          130          30          
+10     jvs085          130          43          
+11     jvs010          130          5           
+12     jvs040          130          21          
+13     jvs091          130          45          
+14     jvs029          130          16          
+15     jvs053          130          24          
+16     jvs062          130          32          
+17     jvs004          130          2           
+18     jvs072          130          39          
+19     jvs027          130          15          
+20     jvs082          130          40          
+21     jvs058          130          28          
+22     jvs056          130          26          
+23     jvs025          130          13          
+24     jvs039          130          20          
+
+================================================================================
+DEV SET - MALE SPEAKERS (24)
+================================================================================
+Rank   Speaker ID      Utterances   Global Rank 
+--------------------------------------------------
+1      jvs009          130          5           
+2      jvs068          130          30          
+3      jvs013          130          8           
+4      jvs074          129          48          
+5      jvs046          130          23          
+6      jvs034          130          17          
+7      jvs042          130          20          
+8      jvs023          130          12          
+9      jvs003          130          2           
+10     jvs006          130          4           
+11     jvs087          130          42          
+12     jvs079          130          38          
+13     jvs041          130          19          
+14     jvs021          130          10          
+15     jvs012          130          7           
+16     jvs032          130          15          
+17     jvs099          130          46          
+18     jvs028          130          13          
+19     jvs037          130          18          
+20     jvs054          130          29          
+21     jvs022          130          11          
+22     jvs070          130          31          
+23     jvs020          130          9           
+24     jvs045          130          22          
+
+================================================================================
+TEST SET - FEMALE SPEAKERS (24)
+================================================================================
+Rank   Speaker ID      Utterances   Global Rank 
+--------------------------------------------------
+1      jvs084          130          42          
+2      jvs083          130          41          
+3      jvs026          130          14          
+4      jvs002          130          1           
+5      jvs092          130          46          
+6      jvs016          130          8           
+7      jvs051          130          23          
+8      jvs063          130          33          
+9      jvs067          130          37          
+10     jvs017          130          9           
+11     jvs019          130          11          
+12     jvs094          130          48          
+13     jvs069          130          38          
+14     jvs043          130          22          
+15     jvs066          130          36          
+16     jvs065          130          35          
+17     jvs055          130          25          
+18     jvs007          130          3           
+19     jvs015          130          7           
+20     jvs093          130          47          
+21     jvs057          130          27          
+22     jvs014          130          6           
+23     jvs036          130          18          
+24     jvs008          130          4           
+
+================================================================================
+TEST SET - MALE SPEAKERS (24)
+================================================================================
+Rank   Speaker ID      Utterances   Global Rank 
+--------------------------------------------------
+1      jvs033          130          16          
+2      jvs097          130          44          
+3      jvs077          130          36          
+4      jvs011          130          6           
+5      jvs088          130          43          
+6      jvs048          130          25          
+7      jvs100          130          47          
+8      jvs005          130          3           
+9      jvs081          130          40          
+10     jvs047          130          24          
+11     jvs050          130          27          
+12     jvs098          130          45          
+13     jvs071          130          32          
+14     jvs076          130          35          
+15     jvs052          130          28          
+16     jvs073          130          33          
+17     jvs049          130          26          
+18     jvs001          130          1           
+19     jvs044          130          21          
+20     jvs078          130          37          
+21     jvs075          130          34          
+22     jvs086          130          41          
+23     jvs080          130          39          
+24     jvs031          130          14          
+
+================================================================================
+SUMMARY STATISTICS
+================================================================================
+
+DEV SET:
+  Female: min=130, max=130, mean=130.0, median=130
+  Male: min=129, max=130, mean=130.0, median=130
+
+TEST SET:
+  Female: min=130, max=130, mean=130.0, median=130
+  Male: min=130, max=130, mean=130.0, median=130
+
+================================================================================
+STEP 2: PROCESSING COMBINED DATASET
+================================================================================
+✓ Same speakers selected: 96 speakers
+✓ Combining nonpara30 and parallel100 subsets
+
+Warning: 2003 utterances in transcripts have no corresponding audio files
+  Sample missing utterances: ['jvs001_BASIC5000_0260', 'jvs001_BASIC5000_0296', 'jvs001_BASIC5000_0927', 'jvs001_BASIC5000_0945', 'jvs001_BASIC5000_1050', 'jvs001_BASIC5000_1307', 'jvs001_BASIC5000_1375', 'jvs001_BASIC5000_1721', 'jvs001_BASIC5000_2556', 'jvs001_BASIC5000_2599']
+  ... and 1993 more
+
+================================================================================
+PROCESSING DEV SET
+================================================================================
+
+================================================================================
+DEV SET - SELECTED SPEAKERS
+================================================================================
+Total speakers: 48 (Female: 24, Male: 24)
+
+================================================================================
+DEV SET - FEMALE SPEAKERS (24)
+================================================================================
+Rank   Speaker ID      Utterances  
+-----------------------------------
+1      jvs059          130         
+2      jvs035          130         
+3      jvs018          130         
+4      jvs064          130         
+5      jvs061          130         
+6      jvs024          130         
+7      jvs090          130         
+8      jvs038          130         
+9      jvs060          130         
+10     jvs085          130         
+11     jvs010          130         
+12     jvs040          130         
+13     jvs091          130         
+14     jvs029          130         
+15     jvs053          130         
+16     jvs062          130         
+17     jvs004          130         
+18     jvs072          130         
+19     jvs027          130         
+20     jvs082          130         
+21     jvs058          130         
+22     jvs056          130         
+23     jvs025          130         
+24     jvs039          130         
+
+================================================================================
+DEV SET - MALE SPEAKERS (24)
+================================================================================
+Rank   Speaker ID      Utterances  
+-----------------------------------
+1      jvs009          130         
+2      jvs068          130         
+3      jvs013          130         
+4      jvs046          130         
+5      jvs034          130         
+6      jvs042          130         
+7      jvs023          130         
+8      jvs003          130         
+9      jvs006          130         
+10     jvs087          130         
+11     jvs079          130         
+12     jvs041          130         
+13     jvs021          130         
+14     jvs012          130         
+15     jvs032          130         
+16     jvs099          130         
+17     jvs028          130         
+18     jvs037          130         
+19     jvs054          130         
+20     jvs022          130         
+21     jvs070          130         
+22     jvs020          130         
+23     jvs045          130         
+24     jvs074          129         
+
+Auto-balancing: Using median trial utterances per speaker (110)
+
+Trial Utterance Balance Statistics:
+  Balance threshold: 110 utterances per speaker
+  No upsampling: Speakers with fewer utterances will keep all their utterances
+  Female: min=110, median=110, max=110, speakers above threshold=0/24, speakers below threshold=0/24
+  Male: min=109, median=110, max=110, speakers above threshold=0/24, speakers below threshold=1/24
+
+================================================================================
+PER-SPEAKER STATISTICS (DEV)
+================================================================================
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+jvs003          M        130      20       110      110        2529        
+jvs004          F        130      20       110      110        2530        
+jvs006          M        130      20       110      110        2529        
+jvs009          M        130      20       110      110        2529        
+jvs010          F        130      20       110      110        2530        
+jvs012          M        130      20       110      110        2529        
+jvs013          M        130      20       110      110        2529        
+jvs018          F        130      20       110      110        2530        
+jvs020          M        130      20       110      110        2529        
+jvs021          M        130      20       110      110        2529        
+jvs022          M        130      20       110      110        2529        
+jvs023          M        130      20       110      110        2529        
+jvs024          F        130      20       110      110        2530        
+jvs025          F        130      20       110      110        2530        
+jvs027          F        130      20       110      110        2530        
+jvs028          M        130      20       110      110        2529        
+jvs029          F        130      20       110      110        2530        
+jvs032          M        130      20       110      110        2529        
+jvs034          M        130      20       110      110        2529        
+jvs035          F        130      20       110      110        2530        
+jvs037          M        130      20       110      110        2529        
+jvs038          F        130      20       110      110        2530        
+jvs039          F        130      20       110      110        2530        
+jvs040          F        130      20       110      110        2530        
+jvs041          M        130      20       110      110        2529        
+jvs042          M        130      20       110      110        2529        
+jvs045          M        130      20       110      110        2529        
+jvs046          M        130      20       110      110        2529        
+jvs053          F        130      20       110      110        2530        
+jvs054          M        130      20       110      110        2529        
+jvs056          F        130      20       110      110        2530        
+jvs058          F        130      20       110      110        2530        
+jvs059          F        130      20       110      110        2530        
+jvs060          F        130      20       110      110        2530        
+jvs061          F        130      20       110      110        2530        
+jvs062          F        130      20       110      110        2530        
+jvs064          F        130      20       110      110        2530        
+jvs068          M        130      20       110      110        2529        
+jvs070          M        130      20       110      110        2529        
+jvs072          F        130      20       110      110        2530        
+jvs074          M        129      20       109      109        2530        
+jvs079          M        130      20       110      110        2529        
+jvs082          F        130      20       110      110        2530        
+jvs085          F        130      20       110      110        2530        
+jvs087          M        130      20       110      110        2529        
+jvs090          F        130      20       110      110        2530        
+jvs091          F        130      20       110      110        2530        
+jvs099          M        130      20       110      110        2529        
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| JVS ja_dev | Same-speaker | 2640 | 2639 | 5279 | Female 24 / Male 24 (total 48) |
+| JVS ja_dev | Different-speaker | 60720 | 60697 | 121417 | Female 24 / Male 24 (total 48) |
+
+================================================================================
+PROCESSING TEST SET
+================================================================================
+
+================================================================================
+TEST SET - SELECTED SPEAKERS
+================================================================================
+Total speakers: 48 (Female: 24, Male: 24)
+
+================================================================================
+TEST SET - FEMALE SPEAKERS (24)
+================================================================================
+Rank   Speaker ID      Utterances  
+-----------------------------------
+1      jvs084          130         
+2      jvs083          130         
+3      jvs026          130         
+4      jvs002          130         
+5      jvs092          130         
+6      jvs016          130         
+7      jvs051          130         
+8      jvs063          130         
+9      jvs067          130         
+10     jvs017          130         
+11     jvs019          130         
+12     jvs094          130         
+13     jvs069          130         
+14     jvs043          130         
+15     jvs066          130         
+16     jvs065          130         
+17     jvs055          130         
+18     jvs007          130         
+19     jvs015          130         
+20     jvs093          130         
+21     jvs057          130         
+22     jvs014          130         
+23     jvs036          130         
+24     jvs008          130         
+
+================================================================================
+TEST SET - MALE SPEAKERS (24)
+================================================================================
+Rank   Speaker ID      Utterances  
+-----------------------------------
+1      jvs033          130         
+2      jvs097          130         
+3      jvs077          130         
+4      jvs011          130         
+5      jvs088          130         
+6      jvs048          130         
+7      jvs100          130         
+8      jvs005          130         
+9      jvs081          130         
+10     jvs047          130         
+11     jvs050          130         
+12     jvs098          130         
+13     jvs071          130         
+14     jvs076          130         
+15     jvs052          130         
+16     jvs073          130         
+17     jvs049          130         
+18     jvs001          130         
+19     jvs044          130         
+20     jvs078          130         
+21     jvs075          130         
+22     jvs086          130         
+23     jvs080          130         
+24     jvs031          130         
+
+Auto-balancing: Using median trial utterances per speaker (110)
+
+Trial Utterance Balance Statistics:
+  Balance threshold: 110 utterances per speaker
+  No upsampling: Speakers with fewer utterances will keep all their utterances
+  Female: min=110, median=110, max=110, speakers above threshold=0/24, speakers below threshold=0/24
+  Male: min=110, median=110, max=110, speakers above threshold=0/24, speakers below threshold=0/24
+
+================================================================================
+PER-SPEAKER STATISTICS (TEST)
+================================================================================
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+jvs001          M        130      20       110      110        2530        
+jvs002          F        130      20       110      110        2530        
+jvs005          M        130      20       110      110        2530        
+jvs007          F        130      20       110      110        2530        
+jvs008          F        130      20       110      110        2530        
+jvs011          M        130      20       110      110        2530        
+jvs014          F        130      20       110      110        2530        
+jvs015          F        130      20       110      110        2530        
+jvs016          F        130      20       110      110        2530        
+jvs017          F        130      20       110      110        2530        
+jvs019          F        130      20       110      110        2530        
+jvs026          F        130      20       110      110        2530        
+jvs031          M        130      20       110      110        2530        
+jvs033          M        130      20       110      110        2530        
+jvs036          F        130      20       110      110        2530        
+jvs043          F        130      20       110      110        2530        
+jvs044          M        130      20       110      110        2530        
+jvs047          M        130      20       110      110        2530        
+jvs048          M        130      20       110      110        2530        
+jvs049          M        130      20       110      110        2530        
+jvs050          M        130      20       110      110        2530        
+jvs051          F        130      20       110      110        2530        
+jvs052          M        130      20       110      110        2530        
+jvs055          F        130      20       110      110        2530        
+jvs057          F        130      20       110      110        2530        
+jvs063          F        130      20       110      110        2530        
+jvs065          F        130      20       110      110        2530        
+jvs066          F        130      20       110      110        2530        
+jvs067          F        130      20       110      110        2530        
+jvs069          F        130      20       110      110        2530        
+jvs071          M        130      20       110      110        2530        
+jvs073          M        130      20       110      110        2530        
+jvs075          M        130      20       110      110        2530        
+jvs076          M        130      20       110      110        2530        
+jvs077          M        130      20       110      110        2530        
+jvs078          M        130      20       110      110        2530        
+jvs080          M        130      20       110      110        2530        
+jvs081          M        130      20       110      110        2530        
+jvs083          F        130      20       110      110        2530        
+jvs084          F        130      20       110      110        2530        
+jvs086          M        130      20       110      110        2530        
+jvs088          M        130      20       110      110        2530        
+jvs092          F        130      20       110      110        2530        
+jvs093          F        130      20       110      110        2530        
+jvs094          F        130      20       110      110        2530        
+jvs097          M        130      20       110      110        2530        
+jvs098          M        130      20       110      110        2530        
+jvs100          M        130      20       110      110        2530        
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| JVS ja_test | Same-speaker | 2640 | 2640 | 5280 | Female 24 / Male 24 (total 48) |
+| JVS ja_test | Different-speaker | 60720 | 60720 | 121440 | Female 24 / Male 24 (total 48) |

@@ -1,0 +1,1472 @@
+=== de ===
+
+================================================================================
+Statistics for de dev
+================================================================================
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| MLS German dev | Same-speaker | 1451 | 1484 | 2935 | Female 15 / Male 15 (total 30) |
+| MLS German dev | Different-speaker | 20314 | 20776 | 41090 | Female 15 / Male 15 (total 30) |
+
+Overall Statistics:
+  Total speakers: 30 (Female: 15, Male: 15)
+  Total utterances: 3469
+  Enrollment utterances: 534 (15.4%)
+  Trial utterances: 2935 (84.6%)
+  Total trials: 44025
+    Target trials: 2935
+    Nontarget trials: 41090
+  Enrollment ratio: 15.0%
+
+Per-Speaker Statistics:
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+10349           F        98       15       83       83         1368        
+10870           M        100      15       85       85         1399        
+1163            F        121      19       102      102        1349        
+13255           M        118      18       100      100        1384        
+13494           M        122      19       103      103        1381        
+135             M        124      19       105      105        1379        
+137             M        124      19       105      105        1379        
+138             M        121      19       102      102        1382        
+13871           F        120      18       102      102        1349        
+141             M        121      19       102      102        1382        
+145             M        124      19       105      105        1379        
+1593            F        121      19       102      102        1349        
+1757            F        123      19       104      104        1347        
+1946            F        122      19       103      103        1348        
+2974            F        120      18       102      102        1349        
+3277            F        122      19       103      103        1348        
+3862            F        121      19       102      102        1349        
+4001            M        91       14       77       77         1407        
+4730            F        83       13       70       70         1381        
+5295            M        116      18       98       98         1386        
+5595            M        122      19       103      103        1381        
+5934            F        120      18       102      102        1349        
+7002            M        120      18       102      102        1382        
+7272            M        111      17       94       94         1390        
+7320            F        106      16       90       90         1361        
+8325            F        96       15       81       81         1370        
+8743            M        119      18       101      101        1383        
+8769            F        120      18       102      102        1349        
+9514            F        122      19       103      103        1348        
+9948            M        121      19       102      102        1382        
+
+Gender-based Statistics:
+  Female:
+    Speakers: 15
+    Total utterances: 1715
+    Enrollment utterances: 264
+    Trial utterances: 1451
+    Target trials: 1451
+    Nontarget trials: 20314
+  Male:
+    Speakers: 15
+    Total utterances: 1754
+    Enrollment utterances: 270
+    Trial utterances: 1484
+    Target trials: 1484
+    Nontarget trials: 20776
+
+================================================================================
+UTTERANCES FOR EACH SPEAKER (de dev)
+================================================================================
+
+10349 (F) - 98 total utterances:
+  Enrollment (15 utterances):
+  Trial (83 utterances):
+
+10870 (M) - 100 total utterances:
+  Enrollment (15 utterances):
+  Trial (85 utterances):
+
+1163 (F) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+13255 (M) - 118 total utterances:
+  Enrollment (18 utterances):
+  Trial (100 utterances):
+
+13494 (M) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+135 (M) - 124 total utterances:
+  Enrollment (19 utterances):
+  Trial (105 utterances):
+
+137 (M) - 124 total utterances:
+  Enrollment (19 utterances):
+  Trial (105 utterances):
+
+138 (M) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+13871 (F) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+141 (M) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+145 (M) - 124 total utterances:
+  Enrollment (19 utterances):
+  Trial (105 utterances):
+
+1593 (F) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+1757 (F) - 123 total utterances:
+  Enrollment (19 utterances):
+  Trial (104 utterances):
+
+1946 (F) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+2974 (F) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+3277 (F) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+3862 (F) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+4001 (M) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+4730 (F) - 83 total utterances:
+  Enrollment (13 utterances):
+  Trial (70 utterances):
+
+5295 (M) - 116 total utterances:
+  Enrollment (18 utterances):
+  Trial (98 utterances):
+
+5595 (M) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+5934 (F) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+7002 (M) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+7272 (M) - 111 total utterances:
+  Enrollment (17 utterances):
+  Trial (94 utterances):
+
+7320 (F) - 106 total utterances:
+  Enrollment (16 utterances):
+  Trial (90 utterances):
+
+8325 (F) - 96 total utterances:
+  Enrollment (15 utterances):
+  Trial (81 utterances):
+
+8743 (M) - 119 total utterances:
+  Enrollment (18 utterances):
+  Trial (101 utterances):
+
+8769 (F) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+9514 (F) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+9948 (M) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+================================================================================
+
+
+================================================================================
+Statistics for de test
+================================================================================
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| MLS German test | Same-speaker | 1429 | 1440 | 2869 | Female 15 / Male 15 (total 30) |
+| MLS German test | Different-speaker | 20006 | 20160 | 40166 | Female 15 / Male 15 (total 30) |
+
+Overall Statistics:
+  Total speakers: 30 (Female: 15, Male: 15)
+  Total utterances: 3394
+  Enrollment utterances: 525 (15.5%)
+  Trial utterances: 2869 (84.5%)
+  Total trials: 43035
+    Target trials: 2869
+    Nontarget trials: 40166
+  Enrollment ratio: 15.0%
+
+Per-Speaker Statistics:
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+1054            M        121      19       102      102        1338        
+11695           M        122      19       103      103        1337        
+12379           F        100      15       85       85         1344        
+1262            F        101      16       85       85         1344        
+140             M        90       14       76       76         1364        
+144             M        121      19       102      102        1338        
+1660            F        118      18       100      100        1329        
+1844            M        121      19       102      102        1338        
+1874            M        102      16       86       86         1354        
+2252            M        97       15       82       82         1358        
+278             F        122      19       103      103        1326        
+3040            M        120      18       102      102        1338        
+3052            M        92       14       78       78         1362        
+3363            M        120      18       102      102        1338        
+3588            F        117      18       99       99         1330        
+4705            M        115      18       97       97         1343        
+4739            F        85       13       72       72         1357        
+4748            M        117      18       99       99         1341        
+4911            M        121      19       102      102        1338        
+6067            F        120      18       102      102        1327        
+7120            F        122      19       103      103        1326        
+7261            F        121      19       102      102        1327        
+7406            M        122      19       103      103        1337        
+7456            F        90       14       76       76         1353        
+7624            F        121      19       102      102        1327        
+8125            F        115      18       97       97         1332        
+8223            F        121      19       102      102        1327        
+8450            F        117      18       99       99         1330        
+91              M        123      19       104      104        1336        
+9494            F        120      18       102      102        1327        
+
+Gender-based Statistics:
+  Female:
+    Speakers: 15
+    Total utterances: 1690
+    Enrollment utterances: 261
+    Trial utterances: 1429
+    Target trials: 1429
+    Nontarget trials: 20006
+  Male:
+    Speakers: 15
+    Total utterances: 1704
+    Enrollment utterances: 264
+    Trial utterances: 1440
+    Target trials: 1440
+    Nontarget trials: 20160
+
+================================================================================
+UTTERANCES FOR EACH SPEAKER (de test)
+================================================================================
+
+1054 (M) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+11695 (M) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+12379 (F) - 100 total utterances:
+  Enrollment (15 utterances):
+  Trial (85 utterances):
+
+1262 (F) - 101 total utterances:
+  Enrollment (16 utterances):
+  Trial (85 utterances):
+
+140 (M) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+144 (M) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+1660 (F) - 118 total utterances:
+  Enrollment (18 utterances):
+  Trial (100 utterances):
+
+1844 (M) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+1874 (M) - 102 total utterances:
+  Enrollment (16 utterances):
+  Trial (86 utterances):
+
+2252 (M) - 97 total utterances:
+  Enrollment (15 utterances):
+  Trial (82 utterances):
+
+278 (F) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+3040 (M) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+3052 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+3363 (M) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+3588 (F) - 117 total utterances:
+  Enrollment (18 utterances):
+  Trial (99 utterances):
+
+4705 (M) - 115 total utterances:
+  Enrollment (18 utterances):
+  Trial (97 utterances):
+
+4739 (F) - 85 total utterances:
+  Enrollment (13 utterances):
+  Trial (72 utterances):
+
+4748 (M) - 117 total utterances:
+  Enrollment (18 utterances):
+  Trial (99 utterances):
+
+4911 (M) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+6067 (F) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+7120 (F) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+7261 (F) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+7406 (M) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+7456 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+7624 (F) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+8125 (F) - 115 total utterances:
+  Enrollment (18 utterances):
+  Trial (97 utterances):
+
+8223 (F) - 121 total utterances:
+  Enrollment (19 utterances):
+  Trial (102 utterances):
+
+8450 (F) - 117 total utterances:
+  Enrollment (18 utterances):
+  Trial (99 utterances):
+
+91 (M) - 123 total utterances:
+  Enrollment (19 utterances):
+  Trial (104 utterances):
+
+9494 (F) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+================================================================================
+
+=== fr ===
+
+================================================================================
+Statistics for fr dev
+================================================================================
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| MLS German dev | Same-speaker | 1043 | 1002 | 2045 | Female 9 / Male 9 (total 18) |
+| MLS German dev | Different-speaker | 8344 | 8016 | 16360 | Female 9 / Male 9 (total 18) |
+
+Overall Statistics:
+  Total speakers: 18 (Female: 9, Male: 9)
+  Total utterances: 2416
+  Enrollment utterances: 371 (15.4%)
+  Trial utterances: 2045 (84.6%)
+  Total trials: 18405
+    Target trials: 2045
+    Nontarget trials: 16360
+  Enrollment ratio: 15.0%
+
+Per-Speaker Statistics:
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+10087           F        103      16       87       87         956         
+10177           F        157      24       133      133        910         
+12205           F        96       15       81       81         962         
+1591            F        120      18       102      102        941         
+1770            M        157      24       133      133        869         
+3267            F        122      19       103      103        940         
+4193            M        159      24       135      135        867         
+4724            M        95       15       80       80         922         
+4937            M        99       15       84       84         918         
+577             F        163      25       138      138        905         
+579             F        154      24       130      130        913         
+5830            F        153      23       130      130        913         
+6318            M        82       13       69       69         933         
+7142            M        161      25       136      136        866         
+7591            F        164      25       139      139        904         
+7601            M        158      24       134      134        868         
+8128            M        111      17       94       94         908         
+928             M        162      25       137      137        865         
+
+Gender-based Statistics:
+  Female:
+    Speakers: 9
+    Total utterances: 1232
+    Enrollment utterances: 189
+    Trial utterances: 1043
+    Target trials: 1043
+    Nontarget trials: 8344
+  Male:
+    Speakers: 9
+    Total utterances: 1184
+    Enrollment utterances: 182
+    Trial utterances: 1002
+    Target trials: 1002
+    Nontarget trials: 8016
+
+================================================================================
+UTTERANCES FOR EACH SPEAKER (fr dev)
+================================================================================
+
+10087 (F) - 103 total utterances:
+  Enrollment (16 utterances):
+  Trial (87 utterances):
+
+10177 (F) - 157 total utterances:
+  Enrollment (24 utterances):
+  Trial (133 utterances):
+
+12205 (F) - 96 total utterances:
+  Enrollment (15 utterances):
+  Trial (81 utterances):
+
+1591 (F) - 120 total utterances:
+  Enrollment (18 utterances):
+  Trial (102 utterances):
+
+1770 (M) - 157 total utterances:
+  Enrollment (24 utterances):
+  Trial (133 utterances):
+
+3267 (F) - 122 total utterances:
+  Enrollment (19 utterances):
+  Trial (103 utterances):
+
+4193 (M) - 159 total utterances:
+  Enrollment (24 utterances):
+  Trial (135 utterances):
+
+4724 (M) - 95 total utterances:
+  Enrollment (15 utterances):
+  Trial (80 utterances):
+
+4937 (M) - 99 total utterances:
+  Enrollment (15 utterances):
+  Trial (84 utterances):
+
+577 (F) - 163 total utterances:
+  Enrollment (25 utterances):
+  Trial (138 utterances):
+
+579 (F) - 154 total utterances:
+  Enrollment (24 utterances):
+  Trial (130 utterances):
+
+5830 (F) - 153 total utterances:
+  Enrollment (23 utterances):
+  Trial (130 utterances):
+
+6318 (M) - 82 total utterances:
+  Enrollment (13 utterances):
+  Trial (69 utterances):
+
+7142 (M) - 161 total utterances:
+  Enrollment (25 utterances):
+  Trial (136 utterances):
+
+7591 (F) - 164 total utterances:
+  Enrollment (25 utterances):
+  Trial (139 utterances):
+
+7601 (M) - 158 total utterances:
+  Enrollment (24 utterances):
+  Trial (134 utterances):
+
+8128 (M) - 111 total utterances:
+  Enrollment (17 utterances):
+  Trial (94 utterances):
+
+928 (M) - 162 total utterances:
+  Enrollment (25 utterances):
+  Trial (137 utterances):
+
+================================================================================
+
+
+================================================================================
+Statistics for fr test
+================================================================================
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| MLS German test | Same-speaker | 1026 | 1028 | 2054 | Female 9 / Male 9 (total 18) |
+| MLS German test | Different-speaker | 8208 | 8224 | 16432 | Female 9 / Male 9 (total 18) |
+
+Overall Statistics:
+  Total speakers: 18 (Female: 9, Male: 9)
+  Total utterances: 2426
+  Enrollment utterances: 372 (15.3%)
+  Trial utterances: 2054 (84.7%)
+  Total trials: 18486
+    Target trials: 2054
+    Nontarget trials: 16432
+  Enrollment ratio: 15.0%
+
+Per-Speaker Statistics:
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+10179           F        157      24       133      133        893         
+12080           F        160      24       136      136        890         
+12977           F        159      24       135      135        891         
+1406            M        162      25       137      137        891         
+2085            F        85       13       72       72         954         
+2114            M        83       13       70       70         958         
+2154            F        117      18       99       99         927         
+2216            M        129      20       109      109        919         
+2223            M        164      25       139      139        889         
+2465            M        161      25       136      136        892         
+296             M        98       15       83       83         945         
+4482            M        97       15       82       82         946         
+5207            F        114      18       96       96         930         
+5476            F        163      25       138      138        888         
+5790            M        160      24       136      136        892         
+7400            F        156      24       132      132        894         
+7762            F        100      15       85       85         941         
+9834            M        161      25       136      136        892         
+
+Gender-based Statistics:
+  Female:
+    Speakers: 9
+    Total utterances: 1211
+    Enrollment utterances: 185
+    Trial utterances: 1026
+    Target trials: 1026
+    Nontarget trials: 8208
+  Male:
+    Speakers: 9
+    Total utterances: 1215
+    Enrollment utterances: 187
+    Trial utterances: 1028
+    Target trials: 1028
+    Nontarget trials: 8224
+
+================================================================================
+UTTERANCES FOR EACH SPEAKER (fr test)
+================================================================================
+
+10179 (F) - 157 total utterances:
+  Enrollment (24 utterances):
+  Trial (133 utterances):
+
+12080 (F) - 160 total utterances:
+  Enrollment (24 utterances):
+  Trial (136 utterances):
+
+12977 (F) - 159 total utterances:
+  Enrollment (24 utterances):
+  Trial (135 utterances):
+
+1406 (M) - 162 total utterances:
+  Enrollment (25 utterances):
+  Trial (137 utterances):
+
+2085 (F) - 85 total utterances:
+  Enrollment (13 utterances):
+  Trial (72 utterances):
+
+2114 (M) - 83 total utterances:
+  Enrollment (13 utterances):
+  Trial (70 utterances):
+
+2154 (F) - 117 total utterances:
+  Enrollment (18 utterances):
+  Trial (99 utterances):
+
+2216 (M) - 129 total utterances:
+  Enrollment (20 utterances):
+  Trial (109 utterances):
+
+2223 (M) - 164 total utterances:
+  Enrollment (25 utterances):
+  Trial (139 utterances):
+
+2465 (M) - 161 total utterances:
+  Enrollment (25 utterances):
+  Trial (136 utterances):
+
+296 (M) - 98 total utterances:
+  Enrollment (15 utterances):
+  Trial (83 utterances):
+
+4482 (M) - 97 total utterances:
+  Enrollment (15 utterances):
+  Trial (82 utterances):
+
+5207 (F) - 114 total utterances:
+  Enrollment (18 utterances):
+  Trial (96 utterances):
+
+5476 (F) - 163 total utterances:
+  Enrollment (25 utterances):
+  Trial (138 utterances):
+
+5790 (M) - 160 total utterances:
+  Enrollment (24 utterances):
+  Trial (136 utterances):
+
+7400 (F) - 156 total utterances:
+  Enrollment (24 utterances):
+  Trial (132 utterances):
+
+7762 (F) - 100 total utterances:
+  Enrollment (15 utterances):
+  Trial (85 utterances):
+
+9834 (M) - 161 total utterances:
+  Enrollment (25 utterances):
+  Trial (136 utterances):
+
+================================================================================
+
+=== es ===
+
+================================================================================
+Statistics for es dev
+================================================================================
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| MLS German dev | Same-speaker | 1000 | 1040 | 2040 | Female 10 / Male 10 (total 20) |
+| MLS German dev | Different-speaker | 9000 | 9360 | 18360 | Female 10 / Male 10 (total 20) |
+
+Overall Statistics:
+  Total speakers: 20 (Female: 10, Male: 10)
+  Total utterances: 2408
+  Enrollment utterances: 368 (15.3%)
+  Trial utterances: 2040 (84.7%)
+  Total trials: 20400
+    Target trials: 2040
+    Nontarget trials: 18360
+  Enrollment ratio: 15.0%
+
+Per-Speaker Statistics:
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+10367           M        85       13       72       72         968         
+1075            M        123      19       104      104        936         
+11670           M        153      23       130      130        910         
+1227            F        96       15       81       81         919         
+13257           F        103      16       87       87         913         
+133             M        109      17       92       92         948         
+13325           M        163      25       138      138        902         
+13543           F        100      15       85       85         915         
+2308            F        152      23       129      129        871         
+2592            F        105      16       89       89         911         
+2767            M        106      16       90       90         950         
+3473            F        151      23       128      128        872         
+3678            F        103      16       87       87         913         
+3719            F        98       15       83       83         917         
+3796            M        99       15       84       84         956         
+4589            M        159      24       135      135        905         
+6223            F        113      17       96       96         904         
+6671            M        82       13       69       69         971         
+7331            F        159      24       135      135        865         
+8630            M        149      23       126      126        914         
+
+Gender-based Statistics:
+  Female:
+    Speakers: 10
+    Total utterances: 1180
+    Enrollment utterances: 180
+    Trial utterances: 1000
+    Target trials: 1000
+    Nontarget trials: 9000
+  Male:
+    Speakers: 10
+    Total utterances: 1228
+    Enrollment utterances: 188
+    Trial utterances: 1040
+    Target trials: 1040
+    Nontarget trials: 9360
+
+================================================================================
+UTTERANCES FOR EACH SPEAKER (es dev)
+================================================================================
+
+10367 (M) - 85 total utterances:
+  Enrollment (13 utterances):
+  Trial (72 utterances):
+
+1075 (M) - 123 total utterances:
+  Enrollment (19 utterances):
+  Trial (104 utterances):
+
+11670 (M) - 153 total utterances:
+  Enrollment (23 utterances):
+  Trial (130 utterances):
+
+1227 (F) - 96 total utterances:
+  Enrollment (15 utterances):
+  Trial (81 utterances):
+
+13257 (F) - 103 total utterances:
+  Enrollment (16 utterances):
+  Trial (87 utterances):
+
+133 (M) - 109 total utterances:
+  Enrollment (17 utterances):
+  Trial (92 utterances):
+
+13325 (M) - 163 total utterances:
+  Enrollment (25 utterances):
+  Trial (138 utterances):
+
+13543 (F) - 100 total utterances:
+  Enrollment (15 utterances):
+  Trial (85 utterances):
+
+2308 (F) - 152 total utterances:
+  Enrollment (23 utterances):
+  Trial (129 utterances):
+
+2592 (F) - 105 total utterances:
+  Enrollment (16 utterances):
+  Trial (89 utterances):
+
+2767 (M) - 106 total utterances:
+  Enrollment (16 utterances):
+  Trial (90 utterances):
+
+3473 (F) - 151 total utterances:
+  Enrollment (23 utterances):
+  Trial (128 utterances):
+
+3678 (F) - 103 total utterances:
+  Enrollment (16 utterances):
+  Trial (87 utterances):
+
+3719 (F) - 98 total utterances:
+  Enrollment (15 utterances):
+  Trial (83 utterances):
+
+3796 (M) - 99 total utterances:
+  Enrollment (15 utterances):
+  Trial (84 utterances):
+
+4589 (M) - 159 total utterances:
+  Enrollment (24 utterances):
+  Trial (135 utterances):
+
+6223 (F) - 113 total utterances:
+  Enrollment (17 utterances):
+  Trial (96 utterances):
+
+6671 (M) - 82 total utterances:
+  Enrollment (13 utterances):
+  Trial (69 utterances):
+
+7331 (F) - 159 total utterances:
+  Enrollment (24 utterances):
+  Trial (135 utterances):
+
+8630 (M) - 149 total utterances:
+  Enrollment (23 utterances):
+  Trial (126 utterances):
+
+================================================================================
+
+
+================================================================================
+Statistics for es test
+================================================================================
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| MLS German test | Same-speaker | 946 | 1071 | 2017 | Female 10 / Male 10 (total 20) |
+| MLS German test | Different-speaker | 8514 | 9639 | 18153 | Female 10 / Male 10 (total 20) |
+
+Overall Statistics:
+  Total speakers: 20 (Female: 10, Male: 10)
+  Total utterances: 2385
+  Enrollment utterances: 368 (15.4%)
+  Trial utterances: 2017 (84.6%)
+  Total trials: 20170
+    Target trials: 2017
+    Nontarget trials: 18153
+  Enrollment ratio: 15.0%
+
+Per-Speaker Statistics:
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+10667           M        157      24       133      133        938         
+11168           F        133      20       113      113        833         
+11266           F        96       15       81       81         865         
+12249           F        101      16       85       85         861         
+12525           F        108      17       91       91         855         
+1448            F        102      16       86       86         860         
+3468            M        103      16       87       87         984         
+3471            M        162      25       137      137        934         
+3503            M        130      20       110      110        961         
+4096            M        116      18       98       98         973         
+4747            F        113      17       96       96         850         
+5691            M        83       13       70       70         1001        
+5870            M        93       14       79       79         992         
+6306            F        93       14       79       79         867         
+676             F        75       12       63       63         883         
+7510            F        144      22       122      122        824         
+7678            M        108      17       91       91         980         
+8306            M        162      25       137      137        934         
+8585            M        152      23       129      129        942         
+97              F        154      24       130      130        816         
+
+Gender-based Statistics:
+  Female:
+    Speakers: 10
+    Total utterances: 1119
+    Enrollment utterances: 173
+    Trial utterances: 946
+    Target trials: 946
+    Nontarget trials: 8514
+  Male:
+    Speakers: 10
+    Total utterances: 1266
+    Enrollment utterances: 195
+    Trial utterances: 1071
+    Target trials: 1071
+    Nontarget trials: 9639
+
+================================================================================
+UTTERANCES FOR EACH SPEAKER (es test)
+================================================================================
+
+10667 (M) - 157 total utterances:
+  Enrollment (24 utterances):
+  Trial (133 utterances):
+
+11168 (F) - 133 total utterances:
+  Enrollment (20 utterances):
+  Trial (113 utterances):
+
+11266 (F) - 96 total utterances:
+  Enrollment (15 utterances):
+  Trial (81 utterances):
+
+12249 (F) - 101 total utterances:
+  Enrollment (16 utterances):
+  Trial (85 utterances):
+
+12525 (F) - 108 total utterances:
+  Enrollment (17 utterances):
+  Trial (91 utterances):
+
+1448 (F) - 102 total utterances:
+  Enrollment (16 utterances):
+  Trial (86 utterances):
+
+3468 (M) - 103 total utterances:
+  Enrollment (16 utterances):
+  Trial (87 utterances):
+
+3471 (M) - 162 total utterances:
+  Enrollment (25 utterances):
+  Trial (137 utterances):
+
+3503 (M) - 130 total utterances:
+  Enrollment (20 utterances):
+  Trial (110 utterances):
+
+4096 (M) - 116 total utterances:
+  Enrollment (18 utterances):
+  Trial (98 utterances):
+
+4747 (F) - 113 total utterances:
+  Enrollment (17 utterances):
+  Trial (96 utterances):
+
+5691 (M) - 83 total utterances:
+  Enrollment (13 utterances):
+  Trial (70 utterances):
+
+5870 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+6306 (F) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+676 (F) - 75 total utterances:
+  Enrollment (12 utterances):
+  Trial (63 utterances):
+
+7510 (F) - 144 total utterances:
+  Enrollment (22 utterances):
+  Trial (122 utterances):
+
+7678 (M) - 108 total utterances:
+  Enrollment (17 utterances):
+  Trial (91 utterances):
+
+8306 (M) - 162 total utterances:
+  Enrollment (25 utterances):
+  Trial (137 utterances):
+
+8585 (M) - 152 total utterances:
+  Enrollment (23 utterances):
+  Trial (129 utterances):
+
+97 (F) - 154 total utterances:
+  Enrollment (24 utterances):
+  Trial (130 utterances):
+
+================================================================================
+
+=== en ===
+
+================================================================================
+Statistics for en dev
+================================================================================
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| MLS German dev | Same-speaker | 1588 | 1632 | 3220 | Female 21 / Male 21 (total 42) |
+| MLS German dev | Different-speaker | 31760 | 32640 | 64400 | Female 21 / Male 21 (total 42) |
+
+Overall Statistics:
+  Total speakers: 42 (Female: 21, Male: 21)
+  Total utterances: 3807
+  Enrollment utterances: 587 (15.4%)
+  Trial utterances: 3220 (84.6%)
+  Total trials: 67620
+    Target trials: 3220
+    Nontarget trials: 64400
+  Enrollment ratio: 15.0%
+
+Per-Speaker Statistics:
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+10118           M        94       15       79       79         1553        
+10214           M        92       14       78       78         1554        
+10218           F        93       14       79       79         1509        
+10326           F        92       14       78       78         1510        
+10508           M        91       14       77       77         1555        
+10644           F        96       15       81       81         1507        
+10826           F        92       14       78       78         1510        
+10845           F        93       14       79       79         1509        
+10917           F        92       14       78       78         1510        
+11130           F        90       14       76       76         1512        
+11252           M        92       14       78       78         1554        
+11734           F        98       15       83       83         1505        
+11879           F        90       14       76       76         1512        
+11988           M        90       14       76       76         1556        
+12150           M        91       14       77       77         1555        
+12499           M        90       14       76       76         1556        
+12659           M        88       14       74       74         1558        
+12674           F        95       15       80       80         1508        
+12719           M        94       15       79       79         1553        
+12960           M        92       14       78       78         1554        
+13033           F        92       14       78       78         1510        
+13116           F        89       14       75       75         1513        
+13194           M        94       15       79       79         1553        
+13228           M        92       14       78       78         1554        
+13506           F        90       14       76       76         1512        
+1982            M        91       14       77       77         1555        
+2398            F        91       14       77       77         1511        
+3263            F        36       6        30       30         1558        
+4627            F        90       14       76       76         1512        
+5939            M        92       14       78       78         1554        
+6047            F        92       14       78       78         1510        
+7010            M        92       14       78       78         1554        
+7366            F        93       14       79       79         1509        
+7579            F        91       14       77       77         1511        
+7875            M        91       14       77       77         1555        
+8167            F        90       14       76       76         1512        
+8473            M        93       14       79       79         1553        
+8728            F        92       14       78       78         1510        
+8862            M        93       14       79       79         1553        
+8908            M        91       14       77       77         1555        
+9525            M        93       14       79       79         1553        
+9679            M        94       15       79       79         1553        
+
+Gender-based Statistics:
+  Female:
+    Speakers: 21
+    Total utterances: 1877
+    Enrollment utterances: 289
+    Trial utterances: 1588
+    Target trials: 1588
+    Nontarget trials: 31760
+  Male:
+    Speakers: 21
+    Total utterances: 1930
+    Enrollment utterances: 298
+    Trial utterances: 1632
+    Target trials: 1632
+    Nontarget trials: 32640
+
+================================================================================
+UTTERANCES FOR EACH SPEAKER (en dev)
+================================================================================
+
+10118 (M) - 94 total utterances:
+  Enrollment (15 utterances):
+  Trial (79 utterances):
+
+10214 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+10218 (F) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+10326 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+10508 (M) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+10644 (F) - 96 total utterances:
+  Enrollment (15 utterances):
+  Trial (81 utterances):
+
+10826 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+10845 (F) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+10917 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+11130 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+11252 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+11734 (F) - 98 total utterances:
+  Enrollment (15 utterances):
+  Trial (83 utterances):
+
+11879 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+11988 (M) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+12150 (M) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+12499 (M) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+12659 (M) - 88 total utterances:
+  Enrollment (14 utterances):
+  Trial (74 utterances):
+
+12674 (F) - 95 total utterances:
+  Enrollment (15 utterances):
+  Trial (80 utterances):
+
+12719 (M) - 94 total utterances:
+  Enrollment (15 utterances):
+  Trial (79 utterances):
+
+12960 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+13033 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+13116 (F) - 89 total utterances:
+  Enrollment (14 utterances):
+  Trial (75 utterances):
+
+13194 (M) - 94 total utterances:
+  Enrollment (15 utterances):
+  Trial (79 utterances):
+
+13228 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+13506 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+1982 (M) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+2398 (F) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+3263 (F) - 36 total utterances:
+  Enrollment (6 utterances):
+  Trial (30 utterances):
+
+4627 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+5939 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+6047 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+7010 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+7366 (F) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+7579 (F) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+7875 (M) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+8167 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+8473 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+8728 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+8862 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+8908 (M) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+9525 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+9679 (M) - 94 total utterances:
+  Enrollment (15 utterances):
+  Trial (79 utterances):
+
+================================================================================
+
+
+================================================================================
+Statistics for en test
+================================================================================
+
+| Subset | Trials | Female | Male | Total | Speakers |
+| --- | --- | --- | --- | --- | --- |
+| MLS German test | Same-speaker | 1574 | 1613 | 3187 | Female 21 / Male 21 (total 42) |
+| MLS German test | Different-speaker | 31480 | 32260 | 63740 | Female 21 / Male 21 (total 42) |
+
+Overall Statistics:
+  Total speakers: 42 (Female: 21, Male: 21)
+  Total utterances: 3769
+  Enrollment utterances: 582 (15.4%)
+  Trial utterances: 3187 (84.6%)
+  Total trials: 66927
+    Target trials: 3187
+    Nontarget trials: 63740
+  Enrollment ratio: 15.0%
+
+Per-Speaker Statistics:
+Speaker         Gender   Total    Enroll   Trial    Target     Nontarget   
+--------------------------------------------------------------------------------
+10226           F        97       15       82       82         1492        
+10453           M        89       14       75       75         1538        
+10611           F        101      16       85       85         1489        
+10839           M        90       14       76       76         1537        
+10994           F        90       14       76       76         1498        
+11093           M        94       15       79       79         1534        
+1127            M        72       11       61       61         1552        
+11341           F        92       14       78       78         1496        
+11563           F        90       14       76       76         1498        
+11938           M        95       15       80       80         1533        
+12028           F        94       15       79       79         1495        
+12037           M        90       14       76       76         1537        
+12119           F        92       14       78       78         1496        
+12236           M        91       14       77       77         1536        
+12278           M        93       14       79       79         1534        
+12339           F        92       14       78       78         1496        
+12439           M        90       14       76       76         1537        
+12459           F        93       14       79       79         1495        
+12676           F        93       14       79       79         1495        
+12752           M        93       14       79       79         1534        
+13009           F        92       14       78       78         1496        
+13092           M        93       14       79       79         1534        
+13103           M        92       14       78       78         1535        
+13177           M        88       14       74       74         1539        
+13313           M        90       14       76       76         1537        
+13398           M        93       14       79       79         1534        
+13422           F        95       15       80       80         1494        
+13522           F        92       14       78       78         1496        
+13894           M        89       14       75       75         1538        
+2221            F        93       14       79       79         1495        
+2556            F        90       14       76       76         1498        
+2904            M        94       15       79       79         1534        
+3169            M        93       14       79       79         1534        
+3426            M        92       14       78       78         1535        
+3803            F        92       14       78       78         1496        
+3831            F        9        2        7        7          1567        
+3986            F        87       14       73       73         1501        
+4293            M        95       15       80       80         1533        
+7122            F        93       14       79       79         1495        
+7171            M        92       14       78       78         1535        
+7788            F        92       14       78       78         1496        
+8613            F        92       14       78       78         1496        
+
+Gender-based Statistics:
+  Female:
+    Speakers: 21
+    Total utterances: 1861
+    Enrollment utterances: 287
+    Trial utterances: 1574
+    Target trials: 1574
+    Nontarget trials: 31480
+  Male:
+    Speakers: 21
+    Total utterances: 1908
+    Enrollment utterances: 295
+    Trial utterances: 1613
+    Target trials: 1613
+    Nontarget trials: 32260
+
+================================================================================
+UTTERANCES FOR EACH SPEAKER (en test)
+================================================================================
+
+10226 (F) - 97 total utterances:
+  Enrollment (15 utterances):
+  Trial (82 utterances):
+
+10453 (M) - 89 total utterances:
+  Enrollment (14 utterances):
+  Trial (75 utterances):
+
+10611 (F) - 101 total utterances:
+  Enrollment (16 utterances):
+  Trial (85 utterances):
+
+10839 (M) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+10994 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+11093 (M) - 94 total utterances:
+  Enrollment (15 utterances):
+  Trial (79 utterances):
+
+1127 (M) - 72 total utterances:
+  Enrollment (11 utterances):
+  Trial (61 utterances):
+
+11341 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+11563 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+11938 (M) - 95 total utterances:
+  Enrollment (15 utterances):
+  Trial (80 utterances):
+
+12028 (F) - 94 total utterances:
+  Enrollment (15 utterances):
+  Trial (79 utterances):
+
+12037 (M) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+12119 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+12236 (M) - 91 total utterances:
+  Enrollment (14 utterances):
+  Trial (77 utterances):
+
+12278 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+12339 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+12439 (M) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+12459 (F) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+12676 (F) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+12752 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+13009 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+13092 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+13103 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+13177 (M) - 88 total utterances:
+  Enrollment (14 utterances):
+  Trial (74 utterances):
+
+13313 (M) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+13398 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+13422 (F) - 95 total utterances:
+  Enrollment (15 utterances):
+  Trial (80 utterances):
+
+13522 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+13894 (M) - 89 total utterances:
+  Enrollment (14 utterances):
+  Trial (75 utterances):
+
+2221 (F) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+2556 (F) - 90 total utterances:
+  Enrollment (14 utterances):
+  Trial (76 utterances):
+
+2904 (M) - 94 total utterances:
+  Enrollment (15 utterances):
+  Trial (79 utterances):
+
+3169 (M) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+3426 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+3803 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+3831 (F) - 9 total utterances:
+  Enrollment (2 utterances):
+  Trial (7 utterances):
+
+3986 (F) - 87 total utterances:
+  Enrollment (14 utterances):
+  Trial (73 utterances):
+
+4293 (M) - 95 total utterances:
+  Enrollment (15 utterances):
+  Trial (80 utterances):
+
+7122 (F) - 93 total utterances:
+  Enrollment (14 utterances):
+  Trial (79 utterances):
+
+7171 (M) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+7788 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+8613 (F) - 92 total utterances:
+  Enrollment (14 utterances):
+  Trial (78 utterances):
+
+================================================================================
+
