@@ -69,6 +69,7 @@ Required final lines:
 
 ```text
 model_integrity=PASS,files=6
+vendor_runtime_files=PASS,files=7
 setup_verification=PASS
 ```
 

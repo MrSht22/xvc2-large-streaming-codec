@@ -21,6 +21,7 @@ VENDOR_RUNTIME_FILES = (
     "anonymization/modules/sttts/speaker_embeddings/speaker_embeddings.py",
     "anonymization/modules/sttts/speaker_embeddings/speechbrain_vectors.py",
     "anonymization/modules/sttts/speaker_embeddings/utils.py",
+    "utils/logger.py",
 )
 
 
