@@ -27,6 +27,23 @@ ROOT = Path(__file__).resolve().parent
 DEFAULT_VENDOR = ROOT / "third_party" / "Voice-Privacy-Challenge-2026"
 
 
+def configure_cuda_visibility(gpus: str) -> list[str]:
+    if gpus.lower() == "cpu":
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+        return []
+
+    inherited = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if inherited is not None:
+        return [value.strip() for value in inherited.split(",") if value.strip()]
+
+    requested = [value.strip() for value in gpus.split(",") if value.strip()]
+    if not requested:
+        raise ValueError("--gpus must contain at least one GPU ID or cpu")
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(requested)
+    return requested
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generate normalized source/SA waveform pairs with a citable VoicePrivacy method."
@@ -197,11 +214,7 @@ def run_sttts(
     seed: int,
 ) -> dict[str, Path]:
     configure_espeak_library()
-    if gpus.lower() == "cpu":
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    else:
-        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        os.environ["CUDA_VISIBLE_DEVICES"] = gpus
+    visible_gpu_ids = configure_cuda_visibility(gpus)
 
     sys.path.insert(0, str(vendor_dir))
     import numpy as np
@@ -243,10 +256,17 @@ def run_sttts(
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-        visible_count = len([value for value in gpus.split(",") if value.strip()])
-        devices = [torch.device(f"cuda:{index}") for index in range(visible_count)]
+        devices = [
+            torch.device(f"cuda:{index}") for index in range(len(visible_gpu_ids))
+        ]
     else:
         devices = [torch.device("cpu")]
+    print(
+        f"sttts_cuda_visible_devices="
+        f"{os.environ.get('CUDA_VISIBLE_DEVICES', 'unset') or 'none'},"
+        f"local_devices={','.join(str(device) for device in devices)}",
+        flush=True,
+    )
 
     dataset_name = "sa_input"
     runtime_model_dir = output_dir / "work" / "model_runtime"

@@ -12,9 +12,26 @@ import soundfile as sf
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_DIR))
+
+from anonymize_sa import configure_cuda_visibility
 
 
 class STTTSPipelineTest(unittest.TestCase):
+    def test_inherited_cuda_visibility_takes_precedence(self) -> None:
+        previous = os.environ.get("CUDA_VISIBLE_DEVICES")
+        try:
+            os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+            visible = configure_cuda_visibility("0")
+
+            self.assertEqual(visible, ["3"])
+            self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "3")
+        finally:
+            if previous is None:
+                os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+            else:
+                os.environ["CUDA_VISIBLE_DEVICES"] = previous
+
     @unittest.skipUnless(
         os.environ.get("SA_STTTS_MODELS_DIR") and os.environ.get("SA_STTTS_TEST_AUDIO"),
         "set SA_STTTS_MODELS_DIR and SA_STTTS_TEST_AUDIO to run the neural smoke test",

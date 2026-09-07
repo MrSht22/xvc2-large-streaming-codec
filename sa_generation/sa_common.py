@@ -132,11 +132,30 @@ def normalize_audio(source: Path, destination: Path, sample_rate: int = 16000) -
 def prepare_normalized_audio(
     items: Iterable[SourceItem], output_dir: Path, sample_rate: int = 16000
 ) -> dict[str, Path]:
+    item_list = list(items)
     normalized = {}
-    for item in items:
+    reused = 0
+    for index, item in enumerate(item_list, 1):
         destination = output_dir / "normalized" / f"{item.utterance_id}.wav"
-        normalize_audio(Path(item.audio_path), destination, sample_rate=sample_rate)
+        try:
+            info = sf.info(destination)
+            valid_existing = (
+                info.samplerate == sample_rate
+                and info.channels == 1
+                and info.frames > 0
+            )
+        except (OSError, RuntimeError):
+            valid_existing = False
+        if valid_existing:
+            reused += 1
+        else:
+            normalize_audio(Path(item.audio_path), destination, sample_rate=sample_rate)
         normalized[item.utterance_id] = destination.resolve()
+        if index % 500 == 0 or index == len(item_list):
+            print(
+                f"normalizing_audio={index}/{len(item_list)},reused={reused}",
+                flush=True,
+            )
     return normalized
 
 
