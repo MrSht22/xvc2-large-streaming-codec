@@ -15,6 +15,7 @@ from parallel_anonymize_sa import (
     merge_pairs,
     read_jsonl,
     shard_output_is_complete,
+    worker_environment,
 )
 
 
@@ -158,7 +159,7 @@ def main() -> None:
                 "--anonymization-level",
                 str(metadata["anonymization_level"]),
                 "--gpus",
-                gpu,
+                "0",
                 "--seed",
                 str(int(metadata["seed"]) + shard_index),
             ]
@@ -166,7 +167,7 @@ def main() -> None:
             process = subprocess.Popen(
                 command,
                 cwd=ROOT,
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                env=worker_environment(gpu),
                 stdout=log_stream,
                 stderr=subprocess.STDOUT,
             )

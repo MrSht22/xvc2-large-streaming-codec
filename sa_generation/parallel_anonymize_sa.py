@@ -15,6 +15,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 
 
+def worker_environment(gpu: str) -> dict[str, str]:
+    environment = os.environ.copy()
+    environment["PYTHONUNBUFFERED"] = "1"
+    environment["CUDA_VISIBLE_DEVICES"] = gpu
+    environment.setdefault("OMP_NUM_THREADS", "1")
+    environment.setdefault("MKL_NUM_THREADS", "1")
+    return environment
+
+
 def read_jsonl(path: Path) -> list[dict]:
     rows = []
     with path.open(encoding="utf-8") as stream:
@@ -204,7 +213,7 @@ def main() -> None:
                 "--anonymization-level",
                 args.anonymization_level,
                 "--gpus",
-                gpu,
+                "0",
                 "--seed",
                 str(args.seed + shard_index),
             ]
@@ -212,7 +221,7 @@ def main() -> None:
             process = subprocess.Popen(
                 command,
                 cwd=ROOT,
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                env=worker_environment(gpu),
                 stdout=log_stream,
                 stderr=subprocess.STDOUT,
             )

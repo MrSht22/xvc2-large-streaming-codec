@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -14,6 +15,7 @@ from parallel_anonymize_sa import (
     merge_pairs,
     partition_by_speaker,
     shard_output_is_complete,
+    worker_environment,
     write_jsonl,
 )
 from resume_parallel_anonymize_sa import (
@@ -23,6 +25,18 @@ from resume_parallel_anonymize_sa import (
 
 
 class ParallelAnonymizeSATest(unittest.TestCase):
+    def test_worker_environment_binds_one_physical_gpu(self) -> None:
+        environment = worker_environment("3")
+
+        self.assertEqual(environment["CUDA_VISIBLE_DEVICES"], "3")
+        self.assertEqual(environment["PYTHONUNBUFFERED"], "1")
+        self.assertEqual(
+            environment["OMP_NUM_THREADS"], os.environ.get("OMP_NUM_THREADS", "1")
+        )
+        self.assertEqual(
+            environment["MKL_NUM_THREADS"], os.environ.get("MKL_NUM_THREADS", "1")
+        )
+
     def test_partition_keeps_speakers_together_and_balances_rows(self) -> None:
         rows = [
             {"utterance_id": f"a-{index}", "speaker_id": "a"} for index in range(4)
