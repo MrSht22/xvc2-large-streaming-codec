@@ -72,9 +72,9 @@ python -m xvc2_codec.preprocess probe-pair-alignment \
   2>&1 | tee "$PREP/logs/pair-alignment-probe.log"
 ```
 
-该 probe 检查 Student hidden 的 zero-lag cosine、最佳 temporal lag、phone argmax 一致率和
-错配 pair baseline。只有 `codec_pair_alignment_probe=PASS` 才可直接使用共享 frame crop；否则
-先修正 pair 对齐，不得启动全量 cache 提取。
+该 probe 检查 Student hidden 的 zero-lag/best-lag cosine、对齐前后 phone argmax 一致率、最佳
+temporal lag 和错配 pair baseline。只有 `codec_pair_alignment_probe=PASS` 才可直接使用共享
+frame crop；否则先修正 pair 对齐，不得启动全量 cache 提取。
 
 ## 2. 四卡提取 Student cache
 

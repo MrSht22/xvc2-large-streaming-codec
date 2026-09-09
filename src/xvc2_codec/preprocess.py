@@ -508,6 +508,10 @@ def command_probe_pair_alignment(args: argparse.Namespace) -> None:
             metrics = lagged_frame_metrics(source_hidden, sa_hidden, args.max_lag_frames)
             source_phone = outputs["phone_logits"][0, :source_frames].argmax(-1)
             sa_phone = outputs["phone_logits"][1, :sa_frames].argmax(-1)
+            zero_frames = min(source_phone.numel(), sa_phone.numel())
+            zero_phone_agreement = float(
+                (source_phone[:zero_frames] == sa_phone[:zero_frames]).float().mean()
+            )
             lag = int(metrics["best_lag_frames"])
             if lag < 0:
                 source_phone, sa_phone = source_phone[-lag:], sa_phone[:lag]
@@ -529,6 +533,7 @@ def command_probe_pair_alignment(args: argparse.Namespace) -> None:
                     "utterance_id": str(row["utterance_id"]),
                     "source_frames": source_frames,
                     "sa_frames": sa_frames,
+                    "phone_argmax_agreement_zero_lag": zero_phone_agreement,
                     "phone_argmax_agreement_at_best_lag": phone_agreement,
                     **metrics,
                 }
@@ -560,9 +565,22 @@ def command_probe_pair_alignment(args: argparse.Namespace) -> None:
         "zero_lag_cosine_quantiles": quantile_report(
             [float(item["zero_lag_cosine"]) for item in items]
         ),
+        "best_lag_cosine_quantiles": quantile_report(
+            [float(item["best_lag_cosine"]) for item in items]
+        ),
         "best_lag_improvement_quantiles": quantile_report(improvements),
-        "phone_argmax_agreement_quantiles": quantile_report(
+        "phone_argmax_agreement_zero_lag_quantiles": quantile_report(
+            [float(item["phone_argmax_agreement_zero_lag"]) for item in items]
+        ),
+        "phone_argmax_agreement_best_lag_quantiles": quantile_report(
             [float(item["phone_argmax_agreement_at_best_lag"]) for item in items]
+        ),
+        "phone_argmax_agreement_gain_quantiles": quantile_report(
+            [
+                float(item["phone_argmax_agreement_at_best_lag"])
+                - float(item["phone_argmax_agreement_zero_lag"])
+                for item in items
+            ]
         ),
         "mismatched_pair_cosine_quantiles": quantile_report(mismatched_cosines),
         "items": items,
