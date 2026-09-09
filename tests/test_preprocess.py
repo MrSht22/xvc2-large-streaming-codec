@@ -11,6 +11,7 @@ from xvc2_codec.audit import audit_manifests
 from xvc2_codec.config import CodecConfig
 from xvc2_codec.data import PairDataset
 from xvc2_codec.preprocess import (
+    batched_lagged_frame_metrics,
     cache_fields,
     command_finalize,
     command_plan,
@@ -114,6 +115,11 @@ def test_lagged_frame_metrics_recovers_known_shift() -> None:
     metrics = lagged_frame_metrics(source, anonymized, maximum_lag=5)
     assert metrics["best_lag_frames"] == 3
     assert metrics["best_lag_cosine"] > 0.99
+    batched = batched_lagged_frame_metrics(
+        [source, source[:25]], [anonymized, anonymized[:25]], 5, torch.device("cpu")
+    )
+    assert [item["best_lag_frames"] for item in batched] == [3, 3]
+    assert all(item["best_lag_cosine"] > 0.99 for item in batched)
 
 
 class FakeStudent(torch.nn.Module):
@@ -174,7 +180,10 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
     student_dir = tmp_path / "student"
     student_dir.mkdir()
     cache_path = student_dir / "hidden.bin"
-    np.zeros((30, 768), dtype=np.float16).tofile(cache_path)
+    hidden_values = np.zeros((30, 768), dtype=np.float16)
+    hidden_values[10:20] = np.arange(10, dtype=np.float16)[:, None]
+    hidden_values[20:30] = np.arange(2, 12, dtype=np.float16)[:, None]
+    hidden_values.tofile(cache_path)
     phone_path = student_dir / "phone.bin"
     np.zeros((30, 40), dtype=np.float16).tofile(phone_path)
     base_cache = {
@@ -210,6 +219,19 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
     speaker_dir.mkdir(exist_ok=True)
     (speaker_dir / "sa_id2idx").write_text("u1 0\n")
     torch.save(torch.ones(1, 128), speaker_dir / "sa_speaker_vectors.pt")
+    alignment_dir = tmp_path / "alignment"
+    alignment_dir.mkdir()
+    write_jsonl(
+        alignment_dir / "alignment-r00.jsonl",
+        [
+            {
+                "utterance_id": "u1",
+                "alignment_lag_frames": -2,
+                "alignment_best_lag_cosine": 0.8,
+                "alignment_phone_argmax_agreement": 0.75,
+            }
+        ],
+    )
     output = tmp_path / "final"
     command_finalize(
         argparse.Namespace(
@@ -217,6 +239,7 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
             pair_manifest=pair_manifest,
             student_cache_dir=student_dir,
             speaker_cache_dir=speaker_dir,
+            alignment_dir=alignment_dir,
             output_dir=output,
         )
     )
@@ -225,6 +248,7 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
     assert source["speaker_target_index"] == 0
     assert pair["source"]["student_hidden_offset_frames"] == 10
     assert pair["sa"]["student_hidden_offset_frames"] == 20
+    assert pair["alignment_lag_frames"] == -2
     assert set(cache_fields(pair["sa"])) == set(base_cache)
     report = audit_manifests(
         output / "source_train_cache.jsonl",
@@ -236,3 +260,4 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
     loaded = PairDataset([pair], hop_length=320, segment_frames=5).load(0, crop_seed=3)
     assert loaded["source"]["student_hidden"].shape == (5, 768)
     assert loaded["sa"]["speaker_target"].shape == (128,)
+    torch.testing.assert_close(loaded["source"]["student_hidden"], loaded["sa"]["student_hidden"])

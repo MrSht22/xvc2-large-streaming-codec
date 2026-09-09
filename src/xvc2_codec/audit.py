@@ -121,14 +121,16 @@ def audit_manifests(
         if len(pair_details) == 2:
             source_hidden = pair_details[0].get("student_hidden_path")
             sa_hidden = pair_details[1].get("student_hidden_path")
-            if (
-                source_hidden
-                and sa_hidden
-                and abs(source_hidden[0] - sa_hidden[0]) > alignment_tolerance
-            ):
-                failures.append(
-                    f"pair:{index}:source_sa_frame_mismatch={source_hidden[0]}:{sa_hidden[0]}"
-                )
+            if source_hidden and sa_hidden:
+                if "alignment_lag_frames" in row:
+                    lag = int(row["alignment_lag_frames"])
+                    overlap = min(source_hidden[0] - max(-lag, 0), sa_hidden[0] - max(lag, 0))
+                    if overlap <= 0:
+                        failures.append(f"pair:{index}:no_overlap_after_lag={lag}")
+                elif abs(source_hidden[0] - sa_hidden[0]) > alignment_tolerance:
+                    failures.append(
+                        f"pair:{index}:source_sa_frame_mismatch={source_hidden[0]}:{sa_hidden[0]}"
+                    )
     return {
         "source_manifest": str(source_path),
         "pair_manifest": str(pair_path),

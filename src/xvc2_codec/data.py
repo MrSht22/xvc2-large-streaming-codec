@@ -138,17 +138,35 @@ class PairDataset(Dataset):
         sa_tensors = _load_view_tensors(row["sa"])
         source_info = torchaudio.info(row["source"]["audio_path"])
         sa_info = torchaudio.info(row["sa"]["audio_path"])
-        available = min(
-            _available_frames(row["source"], source_tensors, self.hop_length, source_info),
-            _available_frames(row["sa"], sa_tensors, self.hop_length, sa_info),
+        source_available = _available_frames(
+            row["source"], source_tensors, self.hop_length, source_info
         )
+        sa_available = _available_frames(row["sa"], sa_tensors, self.hop_length, sa_info)
+        lag = int(row.get("alignment_lag_frames", 0))
+        source_offset = max(-lag, 0)
+        sa_offset = max(lag, 0)
+        available = min(source_available - source_offset, sa_available - sa_offset)
+        if available <= 0:
+            raise RuntimeError(f"Pair has no overlap after alignment lag {lag}")
         frames = min(available, self.segment_frames)
         start = _crop_start(available, frames, crop_seed)
         return {
             "source": _crop_view(
-                row["source"], source_tensors, self.hop_length, start, frames, source_info
+                row["source"],
+                source_tensors,
+                self.hop_length,
+                start + source_offset,
+                frames,
+                source_info,
             ),
-            "sa": _crop_view(row["sa"], sa_tensors, self.hop_length, start, frames, sa_info),
+            "sa": _crop_view(
+                row["sa"],
+                sa_tensors,
+                self.hop_length,
+                start + sa_offset,
+                frames,
+                sa_info,
+            ),
         }
 
 

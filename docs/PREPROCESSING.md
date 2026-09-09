@@ -104,7 +104,34 @@ torchrun --standalone --nproc_per_node=4 \
 codec_student_extraction=PASS
 ```
 
-## 3. GST speaker target
+## 3. 全量 pair lag
+
+Student cache 完成后，直接从 FP16 shard 为每个 pair 搜索 `-30...+30` 帧的最佳全局 lag，避免
+重复运行 Student：
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 \
+PYTHONPATH=src \
+torchrun --standalone --nproc_per_node=4 \
+  -m xvc2_codec.preprocess align-cached-pairs \
+  --pair-manifest "$PAIR" \
+  --student-cache-dir "$PREP/student" \
+  --output-dir "$PREP/alignment" \
+  --max-lag-frames 30 \
+  --batch-size 16 \
+  --require-cuda \
+  2>&1 | tee "$PREP/logs/align-cached-pairs.log"
+
+PYTHONPATH=src \
+python -m xvc2_codec.preprocess summarize-alignment \
+  --alignment-dir "$PREP/alignment" \
+  2>&1 | tee "$PREP/logs/alignment-summary.log"
+```
+
+四个 rank 都必须打印 `codec_cached_pair_alignment=PASS`，合并汇总必须打印
+`codec_alignment_summary=PASS`。lag 只改变 pair 两侧 crop 起点，不修改音频或 Student cache。
+
+## 4. GST speaker target
 
 该阶段必须切换到生成 SA 时使用的 `voiceprivacy-sa` 环境：
 
@@ -135,7 +162,7 @@ codec_speaker_extraction=PASS
 
 并且实际 `embedding_dim=128`。
 
-## 4. Finalize 和 audit
+## 5. Finalize 和 audit
 
 ```bash
 conda activate ctc-gop
@@ -147,6 +174,7 @@ python -m xvc2_codec.preprocess finalize \
   --pair-manifest "$PAIR" \
   --student-cache-dir "$PREP/student" \
   --speaker-cache-dir "$PREP/speakers" \
+  --alignment-dir "$PREP/alignment" \
   --output-dir "$PREP/manifests" \
   2>&1 | tee "$PREP/logs/finalize.log"
 

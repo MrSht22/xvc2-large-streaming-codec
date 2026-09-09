@@ -18,6 +18,7 @@ import torchaudio
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
+from .cache import temporal_cache
 from .data import read_jsonl
 
 
@@ -690,15 +691,220 @@ def command_extract_speakers(args: argparse.Namespace) -> None:
     )
 
 
-def load_student_index(cache_dir: Path) -> dict[str, dict[str, Any]]:
+def load_student_index(
+    cache_dir: Path, required_ids: set[str] | None = None
+) -> dict[str, dict[str, Any]]:
     result = {}
     for path in sorted(cache_dir.glob("index-r*-s*.jsonl")):
         for row in read_jsonl(path):
             item_id = str(row["item_id"])
+            if required_ids is not None and item_id not in required_ids:
+                continue
             if item_id in result:
                 raise ValueError(f"Duplicate Student cache item: {item_id}")
             result[item_id] = row
     return result
+
+
+def alignment_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    lags = [int(row["alignment_lag_frames"]) for row in rows]
+    absolute_lags = [abs(value) for value in lags]
+    best_cosines = [float(row["alignment_best_lag_cosine"]) for row in rows]
+    phone = [float(row["alignment_phone_argmax_agreement"]) for row in rows]
+    status = (
+        "PASS"
+        if float(np.quantile(best_cosines, 0.05)) >= 0.5 and float(np.quantile(phone, 0.05)) >= 0.6
+        else "NEEDS_ATTENTION"
+    )
+    return {
+        "status": status,
+        "rows": len(rows),
+        "negative_lags": sum(value < 0 for value in lags),
+        "zero_lags": sum(value == 0 for value in lags),
+        "positive_lags": sum(value > 0 for value in lags),
+        "signed_lag_frames_quantiles": quantile_report(lags),
+        "absolute_lag_frames_quantiles": quantile_report(absolute_lags),
+        "best_lag_cosine_quantiles": quantile_report(best_cosines),
+        "phone_argmax_agreement_quantiles": quantile_report(phone),
+    }
+
+
+def alignment_fingerprint(pair_manifest: Path, student_cache_dir: Path, world_size: int) -> str:
+    manifest_stat = pair_manifest.stat()
+    index_identity = [
+        (path.name, path.stat().st_size, path.stat().st_mtime_ns)
+        for path in sorted(student_cache_dir.glob("index-r*-s*.jsonl"))
+    ]
+    payload = [
+        [str(pair_manifest), manifest_stat.st_size, manifest_stat.st_mtime_ns],
+        index_identity,
+        world_size,
+    ]
+    return hashlib.sha256(json.dumps(payload, separators=(",", ":")).encode()).hexdigest()
+
+
+def batched_lagged_frame_metrics(
+    sources: list[torch.Tensor],
+    anonymized: list[torch.Tensor],
+    maximum_lag: int,
+    device: torch.device,
+) -> list[dict[str, float | int]]:
+    source_lengths = torch.tensor([value.shape[0] for value in sources], device=device)
+    sa_lengths = torch.tensor([value.shape[0] for value in anonymized], device=device)
+    maximum_time = max(int(source_lengths.max()), int(sa_lengths.max()))
+    source = pad_sequence(sources, batch_first=True).to(device)
+    sa = pad_sequence(anonymized, batch_first=True).to(device)
+    source = torch.nn.functional.pad(source, (0, 0, 0, maximum_time - source.shape[1]))
+    sa = torch.nn.functional.pad(sa, (0, 0, 0, maximum_time - sa.shape[1]))
+    source = torch.nn.functional.normalize(source.float(), dim=-1)
+    sa = torch.nn.functional.normalize(sa.float(), dim=-1)
+    positions = torch.arange(maximum_time, device=device)[None]
+    score_columns = []
+    for lag in range(-maximum_lag, maximum_lag + 1):
+        if lag < 0:
+            left, right = source[:, -lag:], sa[:, :lag]
+            overlap = torch.minimum(source_lengths + lag, sa_lengths).clamp_min(0)
+        elif lag > 0:
+            left, right = source[:, :-lag], sa[:, lag:]
+            overlap = torch.minimum(source_lengths, sa_lengths - lag).clamp_min(0)
+        else:
+            left, right = source, sa
+            overlap = torch.minimum(source_lengths, sa_lengths)
+        similarities = (left * right).sum(-1)
+        mask = positions[:, : similarities.shape[1]] < overlap[:, None]
+        scores = (similarities * mask).sum(-1) / overlap.clamp_min(1)
+        score_columns.append(scores.masked_fill(overlap == 0, -1.0))
+    all_scores = torch.stack(score_columns, dim=1)
+    best_scores, best_indices = all_scores.max(dim=1)
+    zero_scores = all_scores[:, maximum_lag]
+    return [
+        {
+            "zero_lag_cosine": float(zero_scores[index]),
+            "best_lag_cosine": float(best_scores[index]),
+            "best_lag_frames": int(best_indices[index]) - maximum_lag,
+            "best_lag_improvement": float(best_scores[index] - zero_scores[index]),
+        }
+        for index in range(len(sources))
+    ]
+
+
+def command_align_cached_pairs(args: argparse.Namespace) -> None:
+    rank = int(os.environ.get("RANK", "0"))
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+    if args.require_cuda and device.type != "cuda":
+        raise RuntimeError("CUDA is required but unavailable")
+    output_path = args.output_dir / f"alignment-r{rank:02d}.jsonl"
+    complete_path = args.output_dir / f"alignment-r{rank:02d}.complete.json"
+    fingerprint = alignment_fingerprint(args.pair_manifest, args.student_cache_dir, world_size)
+    if complete_path.is_file():
+        complete = json.loads(complete_path.read_text(encoding="utf-8"))
+        if complete.get("fingerprint") != fingerprint:
+            raise RuntimeError(f"Alignment fingerprint differs: {complete_path}")
+        print(f"codec_cached_pair_alignment=PASS,rank={rank},status=SKIP_COMPLETE")
+        return
+    pair_rows = read_jsonl(args.pair_manifest)[rank::world_size]
+    required_ids = set()
+    for row in pair_rows:
+        source_path, sa_path = pair_paths(row)
+        required_ids.add(stable_item_id("pair-source", str(row["utterance_id"]), source_path))
+        required_ids.add(stable_item_id("pair-sa", str(row["utterance_id"]), sa_path))
+    student = load_student_index(args.student_cache_dir, required_ids)
+    missing = required_ids - student.keys()
+    if missing:
+        raise RuntimeError(f"Missing {len(missing)} pair views in Student cache")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    temporary = Path(str(output_path) + f".tmp-{os.getpid()}")
+    output_rows = []
+    started = time.monotonic()
+    try:
+        with temporary.open("w", encoding="utf-8") as stream, torch.inference_mode():
+            for begin in range(0, len(pair_rows), args.batch_size):
+                batch_rows = pair_rows[begin : begin + args.batch_size]
+                loaded = []
+                for row in batch_rows:
+                    utterance_id = str(row["utterance_id"])
+                    source_path, sa_path = pair_paths(row)
+                    source_row = student[stable_item_id("pair-source", utterance_id, source_path)]
+                    sa_row = student[stable_item_id("pair-sa", utterance_id, sa_path)]
+                    source_hidden_cache = temporal_cache(
+                        source_row, "student_hidden", "student_hidden"
+                    )
+                    sa_hidden_cache = temporal_cache(sa_row, "student_hidden", "student_hidden")
+                    source_phone_cache = temporal_cache(source_row, "phone_target", "phone_logits")
+                    sa_phone_cache = temporal_cache(sa_row, "phone_target", "phone_logits")
+                    assert source_hidden_cache and sa_hidden_cache
+                    assert source_phone_cache and sa_phone_cache
+                    loaded.append(
+                        (
+                            utterance_id,
+                            source_hidden_cache.read(),
+                            sa_hidden_cache.read(),
+                            source_phone_cache.read().argmax(-1),
+                            sa_phone_cache.read().argmax(-1),
+                        )
+                    )
+                metrics_batch = batched_lagged_frame_metrics(
+                    [item[1] for item in loaded],
+                    [item[2] for item in loaded],
+                    args.max_lag_frames,
+                    device,
+                )
+                for loaded_item, metrics in zip(loaded, metrics_batch):
+                    utterance_id, _, _, source_phone, sa_phone = loaded_item
+                    lag = int(metrics["best_lag_frames"])
+                    if lag < 0:
+                        source_phone, sa_phone = source_phone[-lag:], sa_phone[:lag]
+                    elif lag > 0:
+                        source_phone, sa_phone = source_phone[:-lag], sa_phone[lag:]
+                    frames = min(source_phone.numel(), sa_phone.numel())
+                    agreement = float((source_phone[:frames] == sa_phone[:frames]).float().mean())
+                    output_row = {
+                        "utterance_id": utterance_id,
+                        "alignment_lag_frames": lag,
+                        "alignment_best_lag_cosine": float(metrics["best_lag_cosine"]),
+                        "alignment_zero_lag_cosine": float(metrics["zero_lag_cosine"]),
+                        "alignment_phone_argmax_agreement": agreement,
+                    }
+                    output_rows.append(output_row)
+                    stream.write(json.dumps(output_row, sort_keys=True) + "\n")
+                processed = begin + len(batch_rows)
+                if processed % 100 <= args.batch_size or processed == len(pair_rows):
+                    print(
+                        f"cached_pair_alignment rank={rank} items={processed}/{len(pair_rows)} "
+                        f"elapsed_seconds={time.monotonic() - started:.1f}",
+                        flush=True,
+                    )
+        os.replace(temporary, output_path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    complete = {
+        "fingerprint": fingerprint,
+        "rows": len(output_rows),
+        "summary": alignment_summary(output_rows),
+    }
+    complete_tmp = Path(str(complete_path) + f".tmp-{os.getpid()}")
+    complete_tmp.write_text(json.dumps(complete, indent=2, sort_keys=True) + "\n")
+    os.replace(complete_tmp, complete_path)
+    print(json.dumps(complete["summary"], sort_keys=True))
+    print(f"codec_cached_pair_alignment=PASS,rank={rank},rows={len(output_rows)}")
+
+
+def command_summarize_alignment(args: argparse.Namespace) -> None:
+    rows = []
+    for path in sorted(args.alignment_dir.glob("alignment-r*.jsonl")):
+        rows.extend(read_jsonl(path))
+    if not rows:
+        raise RuntimeError(f"No alignment rows under {args.alignment_dir}")
+    identifiers = [str(row["utterance_id"]) for row in rows]
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError("Alignment outputs contain duplicate utterance IDs")
+    report = alignment_summary(rows)
+    print(json.dumps(report, sort_keys=True))
+    print(f"codec_alignment_summary={report['status']}")
+    if report["status"] != "PASS":
+        raise SystemExit(1)
 
 
 def cache_fields(row: dict[str, Any]) -> dict[str, Any]:
@@ -720,6 +926,12 @@ def cache_fields(row: dict[str, Any]) -> dict[str, Any]:
 def command_finalize(args: argparse.Namespace) -> None:
     source_rows = read_jsonl(args.source_manifest)
     pair_rows = read_jsonl(args.pair_manifest)
+    alignment_rows = []
+    for path in sorted(args.alignment_dir.glob("alignment-r*.jsonl")):
+        alignment_rows.extend(read_jsonl(path))
+    alignment = {str(row["utterance_id"]): row for row in alignment_rows}
+    if len(alignment) != len(alignment_rows):
+        raise ValueError("Alignment outputs contain duplicate utterance IDs")
     student = load_student_index(args.student_cache_dir)
     source_store = args.speaker_cache_dir / "source" / "codec_source" / "spk-level"
     source_mapping = read_id2idx(source_store / "id2idx")
@@ -770,9 +982,17 @@ def command_finalize(args: argparse.Namespace) -> None:
         source_audio, sa_audio = pair_paths(row)
         if speaker_id not in source_mapping or utterance_id not in sa_mapping:
             raise KeyError(f"Missing speaker target for pair {utterance_id}")
+        if utterance_id not in alignment:
+            raise KeyError(f"Missing alignment for pair {utterance_id}")
+        aligned = alignment[utterance_id]
         pair_output.append(
             {
                 "utterance_id": utterance_id,
+                "alignment_lag_frames": int(aligned["alignment_lag_frames"]),
+                "alignment_best_lag_cosine": float(aligned["alignment_best_lag_cosine"]),
+                "alignment_phone_argmax_agreement": float(
+                    aligned["alignment_phone_argmax_agreement"]
+                ),
                 "source": view(
                     row, "pair-source", source_audio, source_path, source_mapping[speaker_id]
                 ),
@@ -831,6 +1051,19 @@ def build_parser() -> argparse.ArgumentParser:
     probe.add_argument("--seed", type=int, default=1)
     probe.set_defaults(function=command_probe_pair_alignment)
 
+    alignment = commands.add_parser("align-cached-pairs")
+    alignment.add_argument("--pair-manifest", type=Path, required=True)
+    alignment.add_argument("--student-cache-dir", type=Path, required=True)
+    alignment.add_argument("--output-dir", type=Path, required=True)
+    alignment.add_argument("--max-lag-frames", type=int, default=30)
+    alignment.add_argument("--batch-size", type=int, default=16)
+    alignment.add_argument("--require-cuda", action="store_true")
+    alignment.set_defaults(function=command_align_cached_pairs)
+
+    summary = commands.add_parser("summarize-alignment")
+    summary.add_argument("--alignment-dir", type=Path, required=True)
+    summary.set_defaults(function=command_summarize_alignment)
+
     speakers = commands.add_parser("extract-speakers")
     speakers.add_argument("--reference-dir", type=Path, required=True)
     speakers.add_argument("--models-dir", type=Path, required=True)
@@ -846,6 +1079,7 @@ def build_parser() -> argparse.ArgumentParser:
     finalize.add_argument("--pair-manifest", type=Path, required=True)
     finalize.add_argument("--student-cache-dir", type=Path, required=True)
     finalize.add_argument("--speaker-cache-dir", type=Path, required=True)
+    finalize.add_argument("--alignment-dir", type=Path, required=True)
     finalize.add_argument("--output-dir", type=Path, required=True)
     finalize.set_defaults(function=command_finalize)
     return parser
