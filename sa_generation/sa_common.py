@@ -39,6 +39,7 @@ class SourceItem:
     speaker_id: str
     audio_path: str
     gender: str = "u"
+    transcript: str | None = None
 
 
 def _validate_id(value: str, field: str) -> str:
@@ -49,7 +50,37 @@ def _validate_id(value: str, field: str) -> str:
     return value
 
 
-def _item_from_dict(data: dict, line_number: int | None = None) -> SourceItem:
+def _normalize_transcript(value: object) -> str | None:
+    if value is None:
+        return None
+    transcript = " ".join(str(value).split())
+    return transcript or None
+
+
+def _librispeech_transcript(
+    audio_path: Path, cache: dict[Path, dict[str, str]]
+) -> str | None:
+    parts = audio_path.stem.split("-")
+    if len(parts) < 3:
+        return None
+    transcript_path = audio_path.parent / f"{parts[0]}-{parts[1]}.trans.txt"
+    if not transcript_path.is_file():
+        return None
+    if transcript_path not in cache:
+        entries = {}
+        for line in transcript_path.read_text(encoding="utf-8").splitlines():
+            utterance_id, separator, transcript = line.partition(" ")
+            if separator and transcript.strip():
+                entries[utterance_id] = " ".join(transcript.split())
+        cache[transcript_path] = entries
+    return cache[transcript_path].get(audio_path.stem)
+
+
+def _item_from_dict(
+    data: dict,
+    line_number: int | None = None,
+    transcript_cache: dict[Path, dict[str, str]] | None = None,
+) -> SourceItem:
     where = f" on manifest line {line_number}" if line_number is not None else ""
     if "audio_path" not in data:
         raise ValueError(f"Missing audio_path{where}")
@@ -62,11 +93,22 @@ def _item_from_dict(data: dict, line_number: int | None = None) -> SourceItem:
     gender = str(data.get("gender") or "u").lower()
     if gender not in {"f", "m", "u"}:
         raise ValueError(f"gender must be f, m, or u{where}; received {gender!r}")
+    transcript = next(
+        (
+            normalized
+            for key in ("transcript", "normalized_text", "original_text", "text")
+            if (normalized := _normalize_transcript(data.get(key))) is not None
+        ),
+        None,
+    )
+    if transcript is None and transcript_cache is not None:
+        transcript = _librispeech_transcript(audio_path, transcript_cache)
     return SourceItem(
         utterance_id=_validate_id(utterance_id, "utterance_id"),
         speaker_id=_validate_id(speaker_id, "speaker_id"),
         audio_path=str(audio_path),
         gender=gender,
+        transcript=transcript,
     )
 
 
@@ -82,6 +124,7 @@ def load_items(
 
     if manifest is not None:
         items = []
+        transcript_cache: dict[Path, dict[str, str]] = {}
         with manifest.expanduser().resolve().open(encoding="utf-8") as stream:
             for line_number, line in enumerate(stream, 1):
                 if not line.strip():
@@ -92,7 +135,7 @@ def load_items(
                     raise ValueError(
                         f"Invalid JSON on manifest line {line_number}: {error}"
                     ) from error
-                items.append(_item_from_dict(data, line_number))
+                items.append(_item_from_dict(data, line_number, transcript_cache))
     else:
         assert audio is not None
         data = {
@@ -188,6 +231,18 @@ def prepare_kaldi_data(
             for speaker in sorted(speaker_to_gender)
         ],
     }
+    transcripts = [item.transcript for item in item_list]
+    if any(value is not None for value in transcripts):
+        missing = [
+            item.utterance_id for item in item_list if item.transcript is None
+        ]
+        if missing:
+            raise ValueError(
+                "Transcript coverage is incomplete; missing: " + ", ".join(missing[:10])
+            )
+        files["text"] = [
+            f"{item.utterance_id} {item.transcript}\n" for item in item_list
+        ]
     for name, lines in files.items():
         (data_dir / name).write_text("".join(lines), encoding="utf-8")
 

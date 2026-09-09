@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from parallel_anonymize_sa import (
+    GENERATION_CONTRACT,
     ROOT,
     file_sha256,
     merge_pairs,
@@ -38,6 +39,7 @@ def load_parallel_run(output_dir: Path) -> tuple[dict, list[dict], list[Path], l
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
 
     required = {
+        "generation_contract",
         "manifest",
         "manifest_sha256",
         "models_dir",
@@ -45,11 +47,17 @@ def load_parallel_run(output_dir: Path) -> tuple[dict, list[dict], list[Path], l
         "gpus",
         "anonymization_level",
         "seed",
+        "transcript_mode",
+        "online_aligner_fine_tune",
         "shard_utterance_counts",
     }
     missing = sorted(required - metadata.keys())
     if missing:
         raise ValueError(f"Parallel run metadata is missing keys: {', '.join(missing)}")
+    if metadata["generation_contract"] != GENERATION_CONTRACT:
+        raise RuntimeError(
+            "Parallel run uses an incompatible generation contract; use a new output directory"
+        )
 
     manifest = Path(metadata["manifest"])
     if not manifest.is_file():
@@ -162,7 +170,11 @@ def main() -> None:
                 "0",
                 "--seed",
                 str(int(metadata["seed"]) + shard_index),
+                "--transcript-mode",
+                str(metadata["transcript_mode"]),
             ]
+            if metadata["online_aligner_fine_tune"]:
+                command.append("--online-aligner-fine-tune")
             log_stream = log_path.open("x", encoding="utf-8")
             process = subprocess.Popen(
                 command,

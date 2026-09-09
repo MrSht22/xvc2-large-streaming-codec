@@ -94,14 +94,34 @@ class ParallelAnonymizeSATest(unittest.TestCase):
             output = root / "output"
             output.mkdir()
             rows = [
-                {"utterance_id": "u1", "speaker_id": "a"},
-                {"utterance_id": "u2", "speaker_id": "a"},
+                {
+                    "utterance_id": "u1",
+                    "speaker_id": "a",
+                    "sample_alignment": {"source_frames": 100, "aligned_frames": 100},
+                },
+                {
+                    "utterance_id": "u2",
+                    "speaker_id": "a",
+                    "sample_alignment": {"source_frames": 100, "aligned_frames": 100},
+                },
             ]
             write_jsonl(rows, manifest)
             write_jsonl(list(reversed(rows)), output / "pairs.jsonl")
 
             self.assertTrue(shard_output_is_complete(manifest, output))
             self.assertEqual(incomplete_shard_indexes([manifest], [output]), [])
+
+    def test_legacy_shard_without_sample_alignment_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "shard.jsonl"
+            output = root / "output"
+            output.mkdir()
+            rows = [{"utterance_id": "u1", "speaker_id": "a"}]
+            write_jsonl(rows, manifest)
+            write_jsonl(rows, output / "pairs.jsonl")
+
+            self.assertFalse(shard_output_is_complete(manifest, output))
 
     def test_partial_shard_is_selected_for_resume(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

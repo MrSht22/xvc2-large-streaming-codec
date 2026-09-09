@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
+GENERATION_CONTRACT = "sttts-sample-aligned-transcript-v2"
 
 
 def worker_environment(gpu: str) -> dict[str, str]:
@@ -80,10 +81,25 @@ def shard_output_is_complete(shard_manifest: Path, shard_output: Path) -> bool:
         expected_ids = {
             str(row["utterance_id"]) for row in read_jsonl(shard_manifest)
         }
-        actual_ids = {str(row["utterance_id"]) for row in read_jsonl(pair_path)}
+        rows = read_jsonl(pair_path)
+        actual_ids = {str(row["utterance_id"]) for row in rows}
     except (OSError, ValueError):
         return False
-    return actual_ids == expected_ids
+    aligned = True
+    for row in rows:
+        sample_alignment = row.get("sample_alignment")
+        if not isinstance(sample_alignment, dict):
+            aligned = False
+            break
+        source_frames = sample_alignment.get("source_frames")
+        aligned_frames = sample_alignment.get("aligned_frames")
+        if not isinstance(source_frames, int) or source_frames <= 0:
+            aligned = False
+            break
+        if aligned_frames != source_frames:
+            aligned = False
+            break
+    return actual_ids == expected_ids and aligned
 
 
 def merge_pairs(source_rows: list[dict], shard_dirs: list[Path], output: Path) -> None:
@@ -129,6 +145,10 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--launch-delay-seconds", type=float, default=5.0)
     parser.add_argument(
+        "--transcript-mode", choices=("auto", "required", "asr"), default="auto"
+    )
+    parser.add_argument("--online-aligner-fine-tune", action="store_true")
+    parser.add_argument(
         "--vendor-dir",
         type=Path,
         default=ROOT / "third_party" / "Voice-Privacy-Challenge-2026",
@@ -152,6 +172,7 @@ def main() -> None:
     shards = partition_by_speaker(rows, worker_count)
 
     metadata = {
+        "generation_contract": GENERATION_CONTRACT,
         "manifest": str(manifest),
         "manifest_sha256": file_sha256(manifest),
         "models_dir": str(models_dir),
@@ -160,6 +181,8 @@ def main() -> None:
         "workers_per_gpu": args.workers_per_gpu,
         "anonymization_level": args.anonymization_level,
         "seed": args.seed,
+        "transcript_mode": args.transcript_mode,
+        "online_aligner_fine_tune": args.online_aligner_fine_tune,
         "shard_utterance_counts": [len(shard) for shard in shards],
         "shard_speaker_counts": [
             len({str(row["speaker_id"]) for row in shard}) for shard in shards
@@ -185,6 +208,7 @@ def main() -> None:
     processes = []
     log_streams = []
     shard_dirs = []
+    started = time.monotonic()
 
     try:
         for shard_index, shard_rows in enumerate(shards):
@@ -216,7 +240,11 @@ def main() -> None:
                 "0",
                 "--seed",
                 str(args.seed + shard_index),
+                "--transcript-mode",
+                args.transcript_mode,
             ]
+            if args.online_aligner_fine_tune:
+                command.append("--online-aligner-fine-tune")
             log_stream = log_path.open("w", encoding="utf-8")
             process = subprocess.Popen(
                 command,
@@ -262,8 +290,19 @@ def main() -> None:
 
     pair_manifest = output_dir / "pairs.jsonl"
     merge_pairs(rows, shard_dirs, pair_manifest)
+    pair_rows = read_jsonl(pair_manifest)
+    input_hours = sum(
+        float(row["source_audio"]["duration_seconds"]) for row in pair_rows
+    ) / 3600.0
+    elapsed_seconds = time.monotonic() - started
     print(f"workers={worker_count}")
     print(f"utterances={len(rows)}")
+    print(f"transcript_mode={args.transcript_mode}")
+    print(f"online_aligner_fine_tune={args.online_aligner_fine_tune}")
+    print(f"elapsed_seconds={elapsed_seconds:.3f}")
+    print(f"utterances_per_second={len(rows) / elapsed_seconds:.6f}")
+    print(f"input_hours={input_hours:.6f}")
+    print(f"audio_hours_per_wall_hour={input_hours * 3600.0 / elapsed_seconds:.6f}")
     print(f"pair_manifest={pair_manifest}")
     print("parallel_anonymization=PASS")
 

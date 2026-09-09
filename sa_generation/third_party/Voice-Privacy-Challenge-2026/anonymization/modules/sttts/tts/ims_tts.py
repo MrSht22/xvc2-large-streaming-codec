@@ -41,8 +41,9 @@ class ImsTTS:
         if i > 0:
             logger.info(f'Synthesized utt in {i} takes')
 
-        # start and end silence are computed for 16000, so we have to adapt this to different output sr
-        factor = self.output_sr // 16000
+        # The synthesized waveform is still 48 kHz here, while the silence
+        # lengths were measured on the 16 kHz prosody-extraction waveform.
+        factor = 48000 // 16000
         if start_silence is not None:
             start_sil = torch.zeros([start_silence * factor]).to(self.device)
             wav = torch.cat((start_sil, wav), dim=0)

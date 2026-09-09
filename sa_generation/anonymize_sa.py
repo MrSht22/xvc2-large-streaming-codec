@@ -9,6 +9,9 @@ import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
+import numpy as np
+import soundfile as sf
+
 from mcadams import anonymize_file, coefficient_for_identity
 from model_assets import REQUIRED_STTTS_MODELS
 from sa_common import (
@@ -62,6 +65,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=2026, help="STTTS pseudo-speaker seed")
     parser.add_argument("--models-dir", type=Path, help="Extracted STTTS v2.0 model directory")
     parser.add_argument("--vendor-dir", type=Path, default=DEFAULT_VENDOR)
+    parser.add_argument(
+        "--transcript-mode",
+        choices=("auto", "required", "asr"),
+        default="auto",
+        help="Use dataset transcripts when complete, require them, or run phone ASR",
+    )
+    parser.add_argument(
+        "--online-aligner-fine-tune",
+        action="store_true",
+        help="Restore the upstream three-step per-utterance aligner fine-tuning",
+    )
     parser.add_argument(
         "--check-only",
         action="store_true",
@@ -132,6 +146,8 @@ def build_sttts_config(
     output_dir: Path,
     dataset_name: str,
     level: str,
+    use_dataset_transcripts: bool = False,
+    online_aligner_fine_tune: bool = False,
 ) -> dict:
     intermediate = (output_dir / "work" / "sttts_intermediate").resolve()
     level_key = "anon_level_spk" if level == "spk" else "anon_level_utt"
@@ -153,6 +169,7 @@ def build_sttts_config(
                 "ctc_weight": 0.2,
                 "utt_start_token": "~",
                 "utt_end_token": "~#",
+                "use_dataset_transcripts": use_dataset_transcripts,
                 "results_path": intermediate / "transcription" / "asr_branchformer_tts-phn_en",
             },
             "speaker_embeddings": {
@@ -186,6 +203,7 @@ def build_sttts_config(
                 "extractor_type": "ims",
                 "force_compute_extraction": False,
                 "aligner_model_path": models_dir / "tts" / "Aligner" / "aligner.pt",
+                "on_line_fine_tune": online_aligner_fine_tune,
                 "extraction_results_path": intermediate / "original_prosody" / "ims_extractor",
             },
             "tts": {
@@ -212,6 +230,8 @@ def run_sttts(
     level: str,
     gpus: str,
     seed: int,
+    use_dataset_transcripts: bool,
+    online_aligner_fine_tune: bool,
 ) -> dict[str, Path]:
     configure_espeak_library()
     visible_gpu_ids = configure_cuda_visibility(gpus)
@@ -279,6 +299,8 @@ def run_sttts(
         output_dir=output_dir,
         dataset_name=dataset_name,
         level=level,
+        use_dataset_transcripts=use_dataset_transcripts,
+        online_aligner_fine_tune=online_aligner_fine_tune,
     )
     from anonymization.pipelines.sttts import STTTSPipeline
 
@@ -300,6 +322,7 @@ def make_pair_rows(
     backend: str,
     level: str,
     coefficients: dict[str, float] | None = None,
+    sample_alignment: dict[str, dict[str, int]] | None = None,
 ) -> list[dict]:
     rows = []
     for item in items:
@@ -318,8 +341,71 @@ def make_pair_rows(
         }
         if coefficients is not None:
             row["mcadams_coefficient"] = coefficients[item.utterance_id]
+        if sample_alignment is not None:
+            row["sample_alignment"] = sample_alignment[item.utterance_id]
         rows.append(row)
     return rows
+
+
+def enforce_exact_sample_lengths(
+    normalized: dict[str, Path],
+    anonymized: dict[str, Path],
+    maximum_tail_adjustment_samples: int = 256,
+) -> dict[str, dict[str, int]]:
+    alignment = {}
+    for utterance_id, source_path in normalized.items():
+        anonymized_path = anonymized[utterance_id]
+        source_info = sf.info(source_path)
+        anonymized_info = sf.info(anonymized_path)
+        if source_info.samplerate != anonymized_info.samplerate:
+            raise RuntimeError(
+                f"Sample-rate mismatch for {utterance_id}: "
+                f"source={source_info.samplerate}, anonymized={anonymized_info.samplerate}"
+            )
+        if source_info.channels != 1 or anonymized_info.channels != 1:
+            raise RuntimeError(f"Expected mono source and anonymized audio for {utterance_id}")
+
+        adjustment = source_info.frames - anonymized_info.frames
+        if abs(adjustment) > maximum_tail_adjustment_samples:
+            raise RuntimeError(
+                f"SA duration mismatch remains too large for {utterance_id}: "
+                f"source={source_info.frames}, anonymized={anonymized_info.frames}, "
+                f"adjustment={adjustment} samples"
+            )
+
+        if adjustment:
+            waveform, sample_rate = sf.read(
+                anonymized_path, dtype="float32", always_2d=False
+            )
+            if adjustment > 0:
+                waveform = np.pad(waveform, (0, adjustment))
+            else:
+                waveform = waveform[: source_info.frames]
+            temporary = anonymized_path.with_name(
+                f".{anonymized_path.name}.align-{os.getpid()}"
+            )
+            try:
+                sf.write(
+                    temporary,
+                    waveform,
+                    sample_rate,
+                    format="WAV",
+                    subtype=anonymized_info.subtype,
+                )
+                os.replace(temporary, anonymized_path)
+            finally:
+                temporary.unlink(missing_ok=True)
+
+        aligned_info = sf.info(anonymized_path)
+        if aligned_info.frames != source_info.frames:
+            raise RuntimeError(f"Failed to sample-align {utterance_id}")
+        alignment[utterance_id] = {
+            "source_frames": source_info.frames,
+            "anonymized_frames_before_adjustment": anonymized_info.frames,
+            "tail_adjustment_samples": adjustment,
+            "aligned_frames": aligned_info.frames,
+        }
+    return alignment
 
 
 def main() -> None:
@@ -332,11 +418,26 @@ def main() -> None:
         gender=args.gender,
     )
     output_dir = args.output_dir.expanduser().resolve()
+    transcript_count = sum(item.transcript is not None for item in items)
+    if args.transcript_mode == "required" and transcript_count != len(items):
+        raise ValueError(
+            f"Dataset transcripts are required but available for {transcript_count}/{len(items)} items"
+        )
+    if args.transcript_mode == "auto" and transcript_count not in {0, len(items)}:
+        raise ValueError(
+            f"Transcript coverage is incomplete: {transcript_count}/{len(items)} items"
+        )
+    use_dataset_transcripts = (
+        args.transcript_mode != "asr" and transcript_count == len(items)
+    )
     settings = {
         "backend": args.backend,
         "anonymization_level": args.anonymization_level,
         "seed": args.seed if args.backend == "sttts" else None,
         "sample_rate": 16000,
+        "exact_sample_alignment": args.backend == "sttts",
+        "transcript_source": "dataset" if use_dataset_transcripts else "asr",
+        "online_aligner_fine_tune": args.online_aligner_fine_tune,
     }
     fingerprint = input_fingerprint(items, settings)
     metadata_path = output_dir / "run_metadata.json"
@@ -388,8 +489,14 @@ def main() -> None:
             args.anonymization_level,
             args.gpus,
             args.seed,
+            use_dataset_transcripts,
+            args.online_aligner_fine_tune,
         )
         coefficients = None
+        sample_alignment = enforce_exact_sample_lengths(normalized, anonymized)
+
+    if args.backend == "mcadams":
+        sample_alignment = None
 
     rows = make_pair_rows(
         items,
@@ -398,11 +505,15 @@ def main() -> None:
         args.backend,
         args.anonymization_level,
         coefficients,
+        sample_alignment,
     )
     manifest_path = output_dir / "pairs.jsonl"
     write_jsonl(rows, manifest_path)
     print(f"backend={args.backend}")
     print(f"utterances={len(rows)}")
+    if args.backend == "sttts":
+        print(f"transcript_source={'dataset' if use_dataset_transcripts else 'asr'}")
+        print(f"online_aligner_fine_tune={args.online_aligner_fine_tune}")
     print(f"pair_manifest={manifest_path}")
     print("anonymization=PASS")
 

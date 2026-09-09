@@ -7,7 +7,6 @@ import numpy as np
 from pathlib import Path
 
 from .text import Text
-from .recognition.ims_asr import ImsASR
 from utils import read_kaldi_format, setup_logger
 
 set_start_method('spawn', force=True)
@@ -19,7 +18,8 @@ class SpeechRecognition:
         self.devices = devices
         self.save_intermediate = save_intermediate
         self.force_compute = force_compute if force_compute else settings.get('force_compute_recognition', False)
-        self.n_processes = len(self.devices)
+        self.use_dataset_transcripts = settings.get('use_dataset_transcripts', False)
+        self.n_processes = 0 if self.use_dataset_transcripts else len(self.devices)
 
         self.model_hparams = settings
 
@@ -33,8 +33,8 @@ class SpeechRecognition:
             if self.save_intermediate:
                 raise ValueError('Results dir must be specified in parameters or settings!')
 
-        self.asr_models = [create_model_instance(hparams=self.model_hparams, device=device) for device, process in zip(cycle(devices), range(len(devices)))]
-        self.is_phones = (self.asr_models[0].output == 'phones')
+        self.asr_models = [] if self.use_dataset_transcripts else [create_model_instance(hparams=self.model_hparams, device=device) for device, process in zip(cycle(devices), range(len(devices)))]
+        self.is_phones = False if self.use_dataset_transcripts else (self.asr_models[0].output == 'phones')
 
     def recognize_speech(self, dataset_path, dataset_name=None, utterance_list=None):
         dataset_name = dataset_name if dataset_name else dataset_path.name
@@ -42,6 +42,19 @@ class SpeechRecognition:
 
         utt2spk = read_kaldi_format(dataset_path / 'utt2spk')
         texts = Text(is_phones=self.is_phones)
+
+        if self.use_dataset_transcripts:
+            transcript_path = dataset_path / 'text'
+            if not transcript_path.is_file():
+                raise FileNotFoundError(f'Dataset transcript file is missing: {transcript_path}')
+            transcripts = read_kaldi_format(transcript_path, values_as_string=True)
+            missing = [utt for utt in utt2spk if utt not in transcripts]
+            if missing:
+                raise ValueError(f'Dataset transcripts are missing {len(missing)} utterances')
+            for utt, spk in utt2spk.items():
+                texts.add_instance(sentence=transcripts[utt], utterance=utt, speaker=spk)
+            logger.info(f'Use dataset transcripts for {len(texts)} utterances; skip speech recognition.')
+            return texts
 
         if (dataset_results_dir / 'text').exists() and not self.force_compute:
             # if the text created from this ASR model already exists for this dataset and a computation is not
@@ -115,6 +128,7 @@ class SpeechRecognition:
 def create_model_instance(hparams, device):
     recognizer = hparams.get('recognizer')
     if recognizer == 'ims':
+        from .recognition.ims_asr import ImsASR
         return ImsASR(**hparams, device=device)
     else:
         raise ValueError(f'Invalid recognizer option: {recognizer}')
