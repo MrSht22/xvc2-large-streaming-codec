@@ -70,6 +70,23 @@ Source manifest 每行：
 }
 ```
 
+正式全量预处理使用连续 FP16 shard。同一个 row 通过 frame offset 指向 shard 中自己的范围：
+
+```json
+{
+  "student_hidden_path": "/cache/hidden-r00-s00000.bin",
+  "student_hidden_offset_frames": 1234,
+  "student_hidden_frames": 160,
+  "student_hidden_dim": 768,
+  "student_hidden_dtype": "float16",
+  "speaker_target_path": "/cache/source_speaker_vectors.pt",
+  "speaker_target_index": 42
+}
+```
+
+训练和 audit 同时兼容旧的逐 utterance `.pt` 与上述 shard schema。shard 通过 `numpy.memmap`
+只读取当前 crop，避免约 70 万个小文件和整条长音频 cache 读取。
+
 Pair manifest 每行：
 
 ```json
@@ -86,7 +103,7 @@ xvc2-codec-audit \
   --config configs/codec_63m.yaml \
   --source-manifest /path/codec_source_train_manifest.jsonl \
   --pair-manifest /path/sa_pairs_manifest.jsonl \
-  --speaker-target-dim 256
+  --speaker-target-dim 128
 ```
 
 它会读取音频和 Tensor，验证 `[T,768]` Student cache、speaker target、可选 anchor
@@ -115,7 +132,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
   --source-manifest /path/codec_source_train_manifest.jsonl \
   --pair-manifest /path/sa_pairs_manifest.jsonl \
   --output-dir runs/codec-63m-v1 \
-  --speaker-target-dim 256 \
+  --speaker-target-dim 128 \
   --batch-size 4 \
   --segment-seconds 3.2 \
   --pair-probability 0.15 \
@@ -147,6 +164,13 @@ CUDA 训练使用 `spawn` worker，且每个 worker 限制为一个 Torch CPU th
 `global_audio_seconds_per_second`、`mean_data_wait_seconds_per_rank_step` 和
 `maximum_allocated_gib` 选择吞吐最高且显存有余量的配置。
 短测可增加 `--steps 50`，它只限制本次调用的步数，不改变配置中的正式 `max_steps`。
+
+## 全量 Preprocessing
+
+正式 cache 使用 `xvc2-codec-preprocess` 分阶段生成。完整服务器命令和每阶段 PASS 条件见
+[docs/PREPROCESSING.md](docs/PREPROCESSING.md)。必须先运行 `plan`；当前约 4369 小时 source
+加约 300 小时 SA 双视图的 FP16 Student hidden 与 phone logits 预计需要约 1.32 TiB，实际值以
+目标服务器 `plan.json` 为准。
 
 ## 当前边界
 

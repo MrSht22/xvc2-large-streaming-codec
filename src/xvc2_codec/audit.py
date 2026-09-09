@@ -7,9 +7,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-import torch
 import torchaudio
 
+from .cache import temporal_cache, vector_cache
 from .config import CodecConfig, load_config
 from .data import read_jsonl
 
@@ -25,20 +25,6 @@ def audio_metadata(path: Path) -> tuple[int, int]:
             return stream.getframerate(), stream.getnframes()
 
 
-def load_tensor(path: str, preferred_key: str) -> torch.Tensor:
-    value = torch.load(Path(path).expanduser(), map_location="cpu", weights_only=True)
-    if isinstance(value, dict):
-        if preferred_key in value:
-            value = value[preferred_key]
-        elif "tensor" in value:
-            value = value["tensor"]
-        else:
-            raise ValueError(f"missing tensor key {preferred_key!r}")
-    if not torch.is_tensor(value):
-        raise TypeError("cache is not a Tensor")
-    return value
-
-
 def audit_view(
     row: dict[str, Any],
     label: str,
@@ -48,7 +34,7 @@ def audit_view(
 ) -> tuple[list[str], dict[str, Any]]:
     failures: list[str] = []
     required = {"audio_path", "student_hidden_path", "speaker_target_path"}
-    missing = sorted(required - row.keys())
+    missing = sorted(name for name in required if not row.get(name))
     if missing:
         return [f"{label}:missing={missing}"], {}
     details: dict[str, Any] = {}
@@ -66,29 +52,32 @@ def audit_view(
         failures.append(f"{label}:audio={type(error).__name__}")
         audio_frames = None
     cache_contracts = {
-        "student_hidden_path": ("student_hidden", config.student_dim, True),
-        "speaker_target_path": ("speaker_target", speaker_target_dim, False),
-        "phone_target_path": ("phone_logits", config.vocab_size, True),
-        "dyn_target_path": ("dyn_anchor", config.dyn_dim, True),
-        "prosody_target_path": ("prosody", 4, True),
+        "student_hidden": ("student_hidden", config.student_dim, True),
+        "speaker_target": ("speaker_target", speaker_target_dim, False),
+        "phone_target": ("phone_logits", config.vocab_size, True),
+        "dyn_target": ("dyn_anchor", config.dyn_dim, True),
+        "prosody_target": ("prosody", 4, True),
     }
-    for field, (key, dimension, temporal) in cache_contracts.items():
+    for prefix, (key, dimension, temporal) in cache_contracts.items():
+        field = f"{prefix}_path"
         if field not in row or not row[field]:
             continue
         try:
-            tensor = load_tensor(row[field], key)
+            cache = temporal_cache(row, prefix, key) if temporal else vector_cache(row, prefix, key)
+            assert cache is not None
+            shape = cache.shape if temporal else tuple(cache.shape)
+            if temporal:
+                cache.read(0, min(1, cache.frames))
         except Exception as error:
             failures.append(f"{label}:{field}={type(error).__name__}:{error}")
             continue
-        details[field] = list(tensor.shape)
+        details[field] = list(shape)
         expected_rank = 2 if temporal else 1
-        if tensor.ndim != expected_rank or tensor.shape[-1] != dimension:
-            failures.append(f"{label}:{field}:shape={list(tensor.shape)}:expected_last={dimension}")
-        if temporal and audio_frames is not None and tensor.ndim == 2:
-            if abs(tensor.shape[0] - audio_frames) > alignment_tolerance:
-                failures.append(
-                    f"{label}:{field}:frames={tensor.shape[0]}:audio_frames={audio_frames}"
-                )
+        if len(shape) != expected_rank or shape[-1] != dimension:
+            failures.append(f"{label}:{field}:shape={list(shape)}:expected_last={dimension}")
+        if temporal and audio_frames is not None and len(shape) == 2:
+            if abs(shape[0] - audio_frames) > alignment_tolerance:
+                failures.append(f"{label}:{field}:frames={shape[0]}:audio_frames={audio_frames}")
     return failures, details
 
 

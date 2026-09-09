@@ -10,6 +10,8 @@ import torchaudio
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 
+from .cache import temporal_cache, vector_cache
+
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [
@@ -17,30 +19,21 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     ]
 
 
-def _load_tensor(path: str, key: str | None = None) -> torch.Tensor:
-    value = torch.load(Path(path).expanduser(), map_location="cpu", weights_only=True)
-    if isinstance(value, dict):
-        if key and key in value:
-            value = value[key]
-        elif "tensor" in value:
-            value = value["tensor"]
-        else:
-            raise ValueError(f"Tensor dictionary at {path} requires key {key!r}")
-    return value.float()
-
-
 def _load_view_tensors(row: dict[str, Any]) -> dict[str, Any]:
-    hidden = _load_tensor(row["student_hidden_path"], "student_hidden")
+    hidden = temporal_cache(row, "student_hidden", "student_hidden")
+    if hidden is None:
+        raise ValueError("Every row requires student_hidden_path")
     result = {"student_hidden": hidden}
-    optional = {
-        "speaker_target_path": ("speaker_target", None),
-        "phone_target_path": ("phone_target", "phone_logits"),
-        "dyn_target_path": ("dyn_target", "dyn_anchor"),
-        "prosody_target_path": ("prosody_target", "prosody"),
-    }
-    for field, (name, key) in optional.items():
-        if row.get(field):
-            value = _load_tensor(row[field], key)
+    speaker = vector_cache(row, "speaker_target", "speaker_target")
+    if speaker is not None:
+        result["speaker_target"] = speaker
+    for prefix, name, key in (
+        ("phone_target", "phone_target", "phone_logits"),
+        ("dyn_target", "dyn_target", "dyn_anchor"),
+        ("prosody_target", "prosody_target", "prosody"),
+    ):
+        value = temporal_cache(row, prefix, key)
+        if value is not None:
             result[name] = value
     return result
 
@@ -49,7 +42,7 @@ def _available_frames(
     row: dict[str, Any], tensors: dict[str, Any], hop_length: int, info: Any
 ) -> int:
     audio_samples = info.num_frames * 16_000 // info.sample_rate
-    available = min(tensors["student_hidden"].shape[0], audio_samples // hop_length)
+    available = min(tensors["student_hidden"].frames, audio_samples // hop_length)
     if available <= 0:
         raise RuntimeError(f"No aligned frames for {row['audio_path']}")
     return available
@@ -84,14 +77,13 @@ def _crop_view(
 ) -> dict[str, Any]:
     result = {
         "waveform": _load_audio_crop(row, start * hop_length, frames * hop_length, info=info),
-        "student_hidden": tensors["student_hidden"][start : start + frames],
+        "student_hidden": tensors["student_hidden"].read(start, frames),
         "frames": frames,
     }
     for name in ("speaker_target", "phone_target", "dyn_target", "prosody_target"):
         if name in tensors:
-            result[name] = (
-                tensors[name] if name == "speaker_target" else tensors[name][start : start + frames]
-            )
+            value = tensors[name]
+            result[name] = value if name == "speaker_target" else value.read(start, frames)
     return result
 
 
