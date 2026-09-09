@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import random
 import shutil
 import sys
 import time
@@ -433,6 +434,148 @@ def command_extract_student(args: argparse.Namespace) -> None:
     print(f"codec_student_extraction=PASS,rank={rank},items={processed},shards={len(shards)}")
 
 
+def load_audio(path: str, maximum_seconds: float | None = None) -> torch.Tensor:
+    waveform, sample_rate = torchaudio.load(path)
+    if waveform.shape[0] != 1:
+        waveform = waveform.mean(0, keepdim=True)
+    if sample_rate != SAMPLE_RATE:
+        waveform = torchaudio.functional.resample(waveform, sample_rate, SAMPLE_RATE)
+    if maximum_seconds is not None:
+        waveform = waveform[:, : round(maximum_seconds * SAMPLE_RATE)]
+    return waveform
+
+
+def lagged_frame_metrics(
+    source: torch.Tensor, anonymized: torch.Tensor, maximum_lag: int
+) -> dict[str, float | int]:
+    source = torch.nn.functional.normalize(source.float(), dim=-1)
+    anonymized = torch.nn.functional.normalize(anonymized.float(), dim=-1)
+    scores = []
+    for lag in range(-maximum_lag, maximum_lag + 1):
+        if lag < 0:
+            left, right = source[-lag:], anonymized[:lag]
+        elif lag > 0:
+            left, right = source[:-lag], anonymized[lag:]
+        else:
+            frames = min(source.shape[0], anonymized.shape[0])
+            left, right = source[:frames], anonymized[:frames]
+        frames = min(left.shape[0], right.shape[0])
+        score = float((left[:frames] * right[:frames]).sum(-1).mean()) if frames else -1.0
+        scores.append((score, lag))
+    zero_score = scores[maximum_lag][0]
+    best_score, best_lag = max(scores)
+    return {
+        "zero_lag_cosine": zero_score,
+        "best_lag_cosine": best_score,
+        "best_lag_frames": best_lag,
+        "best_lag_improvement": best_score - zero_score,
+    }
+
+
+def quantile_report(values: list[float]) -> dict[str, float]:
+    return {
+        name: float(np.quantile(values, quantile))
+        for name, quantile in (("p50", 0.5), ("p90", 0.9), ("p95", 0.95), ("p99", 0.99))
+    }
+
+
+def command_probe_pair_alignment(args: argparse.Namespace) -> None:
+    device = torch.device(args.device)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is unavailable")
+    rows = read_jsonl(args.pair_manifest)
+    if args.max_items < len(rows):
+        indices = sorted(random.Random(args.seed).sample(range(len(rows)), args.max_items))
+        rows = [rows[index] for index in indices]
+    model = load_student(args.student_checkpoint, device)
+    items = []
+    previous_sa_hidden = None
+    mismatched_cosines = []
+    started = time.monotonic()
+    amp_dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+    with torch.inference_mode():
+        for index, row in enumerate(rows, 1):
+            source_path, sa_path = pair_paths(row)
+            source = load_audio(source_path, args.max_seconds)
+            anonymized = load_audio(sa_path, args.max_seconds)
+            waveforms = pad_sequence([source[0], anonymized[0]], batch_first=True).to(device)
+            lengths = torch.tensor([source.shape[1], anonymized.shape[1]], device=device)
+            with torch.autocast(device.type, dtype=amp_dtype, enabled=device.type == "cuda"):
+                outputs = model(waveforms, lengths)
+            source_frames, sa_frames = (int(value) for value in outputs["output_lengths"])
+            source_hidden = outputs["hidden_states"][0, :source_frames]
+            sa_hidden = outputs["hidden_states"][1, :sa_frames]
+            metrics = lagged_frame_metrics(source_hidden, sa_hidden, args.max_lag_frames)
+            source_phone = outputs["phone_logits"][0, :source_frames].argmax(-1)
+            sa_phone = outputs["phone_logits"][1, :sa_frames].argmax(-1)
+            lag = int(metrics["best_lag_frames"])
+            if lag < 0:
+                source_phone, sa_phone = source_phone[-lag:], sa_phone[:lag]
+            elif lag > 0:
+                source_phone, sa_phone = source_phone[:-lag], sa_phone[lag:]
+            frames = min(source_phone.numel(), sa_phone.numel())
+            phone_agreement = float((source_phone[:frames] == sa_phone[:frames]).float().mean())
+            if previous_sa_hidden is not None:
+                mismatch_frames = min(source_hidden.shape[0], previous_sa_hidden.shape[0])
+                mismatch = torch.nn.functional.cosine_similarity(
+                    source_hidden[:mismatch_frames].float(),
+                    previous_sa_hidden[:mismatch_frames].float(),
+                    dim=-1,
+                ).mean()
+                mismatched_cosines.append(float(mismatch))
+            previous_sa_hidden = sa_hidden
+            items.append(
+                {
+                    "utterance_id": str(row["utterance_id"]),
+                    "source_frames": source_frames,
+                    "sa_frames": sa_frames,
+                    "phone_argmax_agreement_at_best_lag": phone_agreement,
+                    **metrics,
+                }
+            )
+            if index % 10 == 0 or index == len(rows):
+                print(
+                    f"pair_alignment_probe={index}/{len(rows)},"
+                    f"elapsed_seconds={time.monotonic() - started:.1f}",
+                    flush=True,
+                )
+    absolute_lags = [abs(int(item["best_lag_frames"])) for item in items]
+    improvements = [float(item["best_lag_improvement"]) for item in items]
+    within_one = sum(lag <= 1 for lag in absolute_lags) / len(absolute_lags)
+    status = (
+        "PASS"
+        if within_one >= 0.9
+        and float(np.quantile(absolute_lags, 0.95)) <= 2
+        and float(np.quantile(improvements, 0.5)) <= 0.01
+        else "NEEDS_ATTENTION"
+    )
+    report = {
+        "status": status,
+        "checkpoint": str(args.student_checkpoint),
+        "items_sampled": len(items),
+        "max_seconds": args.max_seconds,
+        "max_lag_frames": args.max_lag_frames,
+        "fraction_best_lag_within_one_frame": within_one,
+        "absolute_best_lag_frames_quantiles": quantile_report(absolute_lags),
+        "zero_lag_cosine_quantiles": quantile_report(
+            [float(item["zero_lag_cosine"]) for item in items]
+        ),
+        "best_lag_improvement_quantiles": quantile_report(improvements),
+        "phone_argmax_agreement_quantiles": quantile_report(
+            [float(item["phone_argmax_agreement_at_best_lag"]) for item in items]
+        ),
+        "mismatched_pair_cosine_quantiles": quantile_report(mismatched_cosines),
+        "items": items,
+    }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    summary = {key: value for key, value in report.items() if key != "items"}
+    print(json.dumps(summary, sort_keys=True), flush=True)
+    print(f"codec_pair_alignment_probe={status}", flush=True)
+    if status != "PASS":
+        raise SystemExit(1)
+
+
 def read_id2idx(path: Path) -> dict[str, int]:
     result = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -659,6 +802,17 @@ def build_parser() -> argparse.ArgumentParser:
     student.add_argument("--require-cuda", action="store_true")
     student.set_defaults(function=command_extract_student)
 
+    probe = commands.add_parser("probe-pair-alignment")
+    probe.add_argument("--pair-manifest", type=Path, required=True)
+    probe.add_argument("--student-checkpoint", type=Path, required=True)
+    probe.add_argument("--output", type=Path, required=True)
+    probe.add_argument("--device", default="cuda:0")
+    probe.add_argument("--max-items", type=int, default=256)
+    probe.add_argument("--max-seconds", type=float, default=20.0)
+    probe.add_argument("--max-lag-frames", type=int, default=30)
+    probe.add_argument("--seed", type=int, default=1)
+    probe.set_defaults(function=command_probe_pair_alignment)
+
     speakers = commands.add_parser("extract-speakers")
     speakers.add_argument("--reference-dir", type=Path, required=True)
     speakers.add_argument("--models-dir", type=Path, required=True)
@@ -688,7 +842,14 @@ def main() -> None:
         raise ValueError("references-per-speaker must be positive")
     if getattr(args, "space_safety_factor", 1.0) < 1.0:
         raise ValueError("space-safety-factor must be at least 1")
-    for name in ("batch_size", "shard_max_frames", "max_batch_seconds"):
+    for name in (
+        "batch_size",
+        "shard_max_frames",
+        "max_batch_seconds",
+        "max_items",
+        "max_seconds",
+        "max_lag_frames",
+    ):
         if hasattr(args, name) and getattr(args, name) <= 0:
             raise ValueError(f"{name.replace('_', '-')} must be positive")
     if hasattr(args, "num_workers") and args.num_workers < 0:

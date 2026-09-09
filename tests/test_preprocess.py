@@ -16,6 +16,7 @@ from xvc2_codec.preprocess import (
     command_plan,
     extract_shard,
     extraction_batches,
+    lagged_frame_metrics,
     stable_item_id,
 )
 
@@ -104,6 +105,15 @@ def test_extraction_batches_limit_padded_audio() -> None:
     rows = [{"duration_seconds": value} for value in (1, 1, 4, 4, 4)]
     batches = extraction_batches(rows, batch_size=4, maximum_batch_samples=8 * 16_000)
     assert batches == [[0, 1], [2, 3], [4]]
+
+
+def test_lagged_frame_metrics_recovers_known_shift() -> None:
+    generator = torch.Generator().manual_seed(3)
+    source = torch.randn(30, 8, generator=generator)
+    anonymized = torch.cat((torch.randn(3, 8, generator=generator), source[:-3]))
+    metrics = lagged_frame_metrics(source, anonymized, maximum_lag=5)
+    assert metrics["best_lag_frames"] == 3
+    assert metrics["best_lag_cosine"] > 0.99
 
 
 class FakeStudent(torch.nn.Module):

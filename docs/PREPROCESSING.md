@@ -56,6 +56,26 @@ codec_preprocess_plan=PASS
 若为 `FAIL`，不要执行下一阶段；先更换 `PREP` 到有足够空间的文件系统。`plan` 不解码音频、
 不运行 Student，也不修改原数据。
 
+如果 `pair_duration_alignment.status=NEEDS_ATTENTION`，先运行冻结 Student 对齐 probe：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 \
+PYTHONPATH="$CODEC/src:$STUDENT/src" \
+python -m xvc2_codec.preprocess probe-pair-alignment \
+  --pair-manifest "$PAIR" \
+  --student-checkpoint "$STUDENT_CKPT" \
+  --output "$PREP/plan/pair-alignment-probe.json" \
+  --device cuda:0 \
+  --max-items 256 \
+  --max-seconds 20 \
+  --max-lag-frames 30 \
+  2>&1 | tee "$PREP/logs/pair-alignment-probe.log"
+```
+
+该 probe 检查 Student hidden 的 zero-lag cosine、最佳 temporal lag、phone argmax 一致率和
+错配 pair baseline。只有 `codec_pair_alignment_probe=PASS` 才可直接使用共享 frame crop；否则
+先修正 pair 对齐，不得启动全量 cache 提取。
+
 ## 2. 四卡提取 Student cache
 
 ```bash
