@@ -116,9 +116,11 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
   --pair-manifest /path/sa_pairs_manifest.jsonl \
   --output-dir runs/codec-63m-v1 \
   --speaker-target-dim 256 \
-  --batch-size 1 \
+  --batch-size 4 \
   --segment-seconds 3.2 \
-  --pair-probability 0.15
+  --pair-probability 0.15 \
+  --num-workers 2 \
+  --prefetch-factor 2
 ```
 
 训练日程自动来自配置：
@@ -133,6 +135,18 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
 Checkpoint 保存 generator、训练期 style head、discriminator、两个 optimizer、EMA 和 RNG。
 每个 step 的 source/pair 选择和 per-rank 样本索引由固定 seed 与 global step 推导，因此 resume
 不会依赖不可见的 DataLoader shuffle position。
+
+每个 rank 使用独立的预取 DataLoader；global step 决定 source/pair 选择、样本索引和
+original/SA 共享 crop，因此增加 worker 或断点恢复不会改变训练样本。Pair batch 会将 original
+和 SA 合并后同时送入 GAN/FM。Generator 前 1500 steps 做线性 LR warm-up，Discriminator
+在 10k step 启动后的前 1000 次更新独立 warm-up。
+CUDA 训练使用 `spawn` worker，且每个 worker 限制为一个 Torch CPU thread，避免 4 个 rank
+的预取进程在约 10 核 CPU 上过度抢占。
+
+正式训练前应依次 benchmark `--batch-size 2/4/8`，保持每个 rank 两个 worker，并根据日志中的
+`global_audio_seconds_per_second`、`mean_data_wait_seconds_per_rank_step` 和
+`maximum_allocated_gib` 选择吞吐最高且显存有余量的配置。
+短测可增加 `--steps 50`，它只限制本次调用的步数，不改变配置中的正式 `max_steps`。
 
 ## 当前边界
 

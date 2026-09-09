@@ -140,6 +140,8 @@ class LossConfig:
 class TrainingConfig:
     generator_learning_rate: float = 1e-4
     discriminator_learning_rate: float = 2e-4
+    generator_warmup_steps: int = 1_500
+    discriminator_warmup_steps: int = 1_000
     weight_decay: float = 1e-4
     gradient_clip: float = 5.0
     amp: str = "bf16"
@@ -157,6 +159,7 @@ class TrainingConfig:
             )
             <= 0
             or self.weight_decay < 0
+            or min(self.generator_warmup_steps, self.discriminator_warmup_steps) < 0
         ):
             raise ValueError("Invalid training scalar")
         if self.amp not in {"bf16", "fp16", "none"}:

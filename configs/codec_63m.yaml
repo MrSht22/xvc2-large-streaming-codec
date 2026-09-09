@@ -41,6 +41,8 @@ loss:
 training:
   generator_learning_rate: 0.0001
   discriminator_learning_rate: 0.0002
+  generator_warmup_steps: 1500
+  discriminator_warmup_steps: 1000
   weight_decay: 0.0001
   gradient_clip: 5.0
   amp: bf16
@@ -48,4 +50,3 @@ training:
   seed: 1
   log_interval: 20
   save_interval: 10000
-

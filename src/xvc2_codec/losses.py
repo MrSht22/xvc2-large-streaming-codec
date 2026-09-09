@@ -16,8 +16,8 @@ class ReconstructionLoss:
         self.mel_filters: dict[torch.device, torch.Tensor] = {}
 
     def _magnitude(self, waveform: torch.Tensor, fft_size: int) -> torch.Tensor:
-        if waveform.numel() < fft_size:
-            waveform = F.pad(waveform, (0, fft_size - waveform.numel()))
+        if waveform.shape[-1] < fft_size:
+            waveform = F.pad(waveform, (0, fft_size - waveform.shape[-1]))
         key = (fft_size, waveform.device)
         if key not in self.windows:
             self.windows[key] = torch.hann_window(fft_size, device=waveform.device)
@@ -53,31 +53,70 @@ class ReconstructionLoss:
     def __call__(
         self, predicted: torch.Tensor, target: torch.Tensor, sample_lengths: torch.Tensor
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        wave_losses, log_losses, convergence_losses, mel_losses = [], [], [], []
-        for index, length in enumerate(sample_lengths.tolist()):
-            predicted_item = predicted[index, 0, :length]
-            target_item = target[index, 0, :length]
-            wave_losses.append(F.l1_loss(predicted_item, target_item))
-            current_log, current_convergence = [], []
-            for size in self.fft_sizes:
-                predicted_magnitude = self._magnitude(predicted_item, size)
-                target_magnitude = self._magnitude(target_item, size)
-                current_log.append(F.l1_loss(predicted_magnitude.log(), target_magnitude.log()))
-                current_convergence.append(
-                    torch.linalg.vector_norm(predicted_magnitude - target_magnitude)
-                    / torch.linalg.vector_norm(target_magnitude).clamp_min(1e-5)
+        predicted = predicted[:, 0].float()
+        target = target[:, 0].float()
+        sample_mask = (
+            torch.arange(predicted.shape[-1], device=predicted.device)[None]
+            < sample_lengths[:, None]
+        )
+        waveform_l1 = (
+            ((predicted - target).abs() * sample_mask).sum(-1) / sample_lengths.clamp_min(1)
+        ).mean()
+
+        log_losses, convergence_losses = [], []
+        magnitudes = {}
+        for size in self.fft_sizes:
+            predicted_magnitude = self._magnitude(predicted, size)
+            target_magnitude = self._magnitude(target, size)
+            magnitudes[size] = (predicted_magnitude, target_magnitude)
+            hop = size // 4
+            valid_frames = ((sample_lengths - size).clamp_min(0) // hop + 1).clamp_max(
+                predicted_magnitude.shape[-1]
+            )
+            frame_mask = (
+                torch.arange(predicted_magnitude.shape[-1], device=predicted.device)[None, None]
+                < valid_frames[:, None, None]
+            )
+            denominator = frame_mask.sum((1, 2)).clamp_min(1) * predicted_magnitude.shape[1]
+            log_losses.append(
+                ((predicted_magnitude.log() - target_magnitude.log()).abs() * frame_mask).sum(
+                    (1, 2)
                 )
-            log_losses.append(torch.stack(current_log).mean())
-            convergence_losses.append(torch.stack(current_convergence).mean())
-            mel_filter = self._mel_filter(predicted.device)
-            predicted_mel = mel_filter @ self._magnitude(predicted_item, 1024)
-            target_mel = mel_filter @ self._magnitude(target_item, 1024)
-            mel_losses.append(F.l1_loss(predicted_mel.log(), target_mel.log()))
+                / denominator
+            )
+            difference = (predicted_magnitude - target_magnitude) * frame_mask
+            convergence_losses.append(
+                torch.linalg.vector_norm(difference, dim=(1, 2))
+                / torch.linalg.vector_norm(target_magnitude * frame_mask, dim=(1, 2)).clamp_min(
+                    1e-5
+                )
+            )
+
+        if 1024 in magnitudes:
+            predicted_magnitude, target_magnitude = magnitudes[1024]
+        else:
+            predicted_magnitude = self._magnitude(predicted, 1024)
+            target_magnitude = self._magnitude(target, 1024)
+        valid_mel_frames = ((sample_lengths - 1024).clamp_min(0) // 256 + 1).clamp_max(
+            predicted_magnitude.shape[-1]
+        )
+        mel_mask = (
+            torch.arange(predicted_magnitude.shape[-1], device=predicted.device)[None, None]
+            < valid_mel_frames[:, None, None]
+        )
+        mel_filter = self._mel_filter(predicted.device)
+        predicted_mel = torch.matmul(mel_filter, predicted_magnitude).clamp_min(1e-5)
+        target_mel = torch.matmul(mel_filter, target_magnitude).clamp_min(1e-5)
+        mel_denominator = mel_mask.sum((1, 2)).clamp_min(1) * predicted_mel.shape[1]
+        log_mel = (
+            ((predicted_mel.log() - target_mel.log()).abs() * mel_mask).sum((1, 2))
+            / mel_denominator
+        ).mean()
         metrics = {
-            "waveform_l1": torch.stack(wave_losses).mean(),
+            "waveform_l1": waveform_l1,
             "log_spectral": torch.stack(log_losses).mean(),
             "spectral_convergence": torch.stack(convergence_losses).mean(),
-            "log_mel": torch.stack(mel_losses).mean(),
+            "log_mel": log_mel,
         }
         total = (
             metrics["log_spectral"]
