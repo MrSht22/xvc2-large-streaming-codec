@@ -95,6 +95,39 @@ def inventory_rows(
     return inventory
 
 
+def pair_duration_report(pair_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    source = np.asarray(
+        [duration_seconds(row, pair_paths(row)[0], "source_audio") for row in pair_rows],
+        dtype=np.float64,
+    )
+    anonymized = np.asarray(
+        [duration_seconds(row, pair_paths(row)[1], "anonymized_audio") for row in pair_rows],
+        dtype=np.float64,
+    )
+    absolute = np.abs(anonymized - source)
+    relative = absolute / np.maximum(source, 1e-9)
+    signed = anonymized - source
+    quantiles = (0.5, 0.9, 0.95, 0.99)
+    return {
+        "status": "PASS" if float(np.quantile(relative, 0.95)) <= 0.01 else "NEEDS_ATTENTION",
+        "rows": len(pair_rows),
+        "source_hours": float(source.sum() / 3600),
+        "anonymized_hours": float(anonymized.sum() / 3600),
+        "mean_signed_drift_ms": float(signed.mean() * 1000),
+        "mean_absolute_drift_ms": float(absolute.mean() * 1000),
+        "absolute_drift_ms_quantiles": {
+            f"p{round(quantile * 100)}": float(np.quantile(absolute, quantile) * 1000)
+            for quantile in quantiles
+        },
+        "relative_drift_percent_quantiles": {
+            f"p{round(quantile * 100)}": float(np.quantile(relative, quantile) * 100)
+            for quantile in quantiles
+        },
+        "fraction_within_one_50hz_frame": float((absolute <= 0.02).mean()),
+        "fraction_within_five_percent": float((relative <= 0.05).mean()),
+    }
+
+
 def write_speaker_references(
     source_rows: list[dict[str, Any]], output_dir: Path, references_per_speaker: int
 ) -> int:
@@ -134,6 +167,7 @@ def command_plan(args: argparse.Namespace) -> None:
     source_rows = read_jsonl(args.source_manifest)
     pair_rows = read_jsonl(args.pair_manifest)
     inventory = inventory_rows(source_rows, pair_rows)
+    pair_durations = pair_duration_report(pair_rows)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     write_jsonl(inventory, args.output_dir / "inventory.jsonl")
     reference_count = write_speaker_references(
@@ -151,6 +185,7 @@ def command_plan(args: argparse.Namespace) -> None:
         "status": "PASS" if free_bytes >= required_bytes else "FAIL",
         "source_rows": len(source_rows),
         "pair_rows": len(pair_rows),
+        "pair_duration_alignment": pair_durations,
         "inventory_items": len(inventory),
         "inventory_hours": sum(row["duration_seconds"] for row in inventory) / 3600,
         "inventory_hours_by_role": hours_by_role,

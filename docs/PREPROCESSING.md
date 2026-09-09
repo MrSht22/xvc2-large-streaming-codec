@@ -45,6 +45,7 @@ python -m xvc2_codec.preprocess plan \
 - 每个 source speaker 选择最多 3 条 GST reference；
 - 估计 FP16 `[T,768]` hidden 与 `[T,40]` phone-logit cache 空间；
 - 检查目标文件系统可用空间，并预留 10% 余量。
+- 报告 original/SA 的逐条 duration drift 分位数，作为同帧 SA loss 的对齐诊断。
 
 继续条件：终端末行必须是：
 

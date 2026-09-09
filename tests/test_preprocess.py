@@ -95,6 +95,8 @@ def test_plan_builds_inventory_and_speaker_references(tmp_path: Path) -> None:
     report = json.loads((output / "plan.json").read_text())
     assert report["status"] == "PASS"
     assert report["inventory_items"] == 3
+    assert report["pair_duration_alignment"]["status"] == "PASS"
+    assert report["pair_duration_alignment"]["fraction_within_one_50hz_frame"] == 1.0
     assert (output / "speaker_references" / "wav.scp").is_file()
 
 
