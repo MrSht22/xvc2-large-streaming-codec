@@ -14,12 +14,12 @@ export ROOT=/inspire/hdd2/project/multilingualspeechrecognition/chenxie-25019/qi
 export CODEC=$ROOT/xvc2-large-streaming-codec
 export STUDENT=$ROOT/xvc2-large-streaming-student
 export SOURCE=$ROOT/xvc2-large-streaming-student/runs/codec-audio-all-cap30h-v1/train_audio.jsonl
-export PAIR=$CODEC/sa_generation/runs/sa-librispeech-clean300h-sttts-spk-w16/pairs.jsonl
+export PAIR=$CODEC/sa_generation/runs/sa-librispeech-clean300h-sttts-aligned-transcript-v2/pairs.jsonl
 export STUDENT_CKPT=$STUDENT/runs/student-12x768-2500h-extension-1epoch-v1/step-053168.pt
-export SA_RUN=$CODEC/sa_generation/runs/sa-librispeech-clean300h-sttts-spk-w16
+export SA_RUN=$CODEC/sa_generation/runs/sa-librispeech-clean300h-sttts-aligned-transcript-v2
 export MODELS=$CODEC/sa_generation/models/voicepat-v2
 export VENDOR=$CODEC/sa_generation/third_party/Voice-Privacy-Challenge-2026
-export PREP=$CODEC/runs/codec-preprocessing-v1
+export PREP=$CODEC/runs/codec-preprocessing-aligned-transcript-v2
 
 cd "$CODEC"
 git pull --ff-only origin main

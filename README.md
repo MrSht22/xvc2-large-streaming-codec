@@ -160,8 +160,9 @@ original/SA 共享 crop，因此增加 worker 或断点恢复不会改变训练�
 CUDA 训练使用 `spawn` worker，且每个 worker 限制为一个 Torch CPU thread，避免 4 个 rank
 的预取进程在约 10 核 CPU 上过度抢占。
 
-SA pair 使用预处理得到的 `alignment_lag_frames` 自动错位裁剪两侧 waveform 和 cache；不会把
-存在约 60-390 ms 边界偏移的 original/SA 直接按相同 frame index 监督。
+SA pair 使用预处理得到的 `alignment_lag_frames` 自动裁剪两侧 waveform 和 cache。当前
+aligned-transcript-v2 数据已做逐样本长度对齐；Student probe 和全量 cached alignment 仍作为
+语义时间轴门槛，避免仅凭音频总长度相等就假设 frame-level supervision 已对齐。
 
 正式训练前应依次 benchmark `--batch-size 2/4/8`，保持每个 rank 两个 worker，并根据日志中的
 `global_audio_seconds_per_second`、`mean_data_wait_seconds_per_rank_step` 和
