@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,12 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 
 from .cache import temporal_cache, vector_cache
+
+
+@dataclass(frozen=True)
+class AudioMetadata:
+    sample_rate: int
+    num_frames: int
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -39,7 +46,7 @@ def _load_view_tensors(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _available_frames(
-    row: dict[str, Any], tensors: dict[str, Any], hop_length: int, info: Any
+    row: dict[str, Any], tensors: dict[str, Any], hop_length: int, info: AudioMetadata
 ) -> int:
     audio_samples = info.num_frames * 16_000 // info.sample_rate
     available = min(tensors["student_hidden"].frames, audio_samples // hop_length)
@@ -48,18 +55,43 @@ def _available_frames(
     return available
 
 
+def _audio_metadata(row: dict[str, Any]) -> AudioMetadata:
+    sample_rate = row.get("audio_sample_rate")
+    num_frames = row.get("audio_num_frames")
+    if sample_rate is None and num_frames is None:
+        info = torchaudio.info(row["audio_path"])
+        return AudioMetadata(sample_rate=int(info.sample_rate), num_frames=int(info.num_frames))
+    if sample_rate is None or num_frames is None:
+        raise ValueError(
+            "Audio metadata requires both audio_sample_rate and audio_num_frames: "
+            f"{row['audio_path']}"
+        )
+    metadata = AudioMetadata(sample_rate=int(sample_rate), num_frames=int(num_frames))
+    if metadata.sample_rate <= 0 or metadata.num_frames <= 0:
+        raise ValueError(f"Invalid audio metadata for {row['audio_path']}: {metadata}")
+    return metadata
+
+
 def _load_audio_crop(
-    row: dict[str, Any], start_sample: int, num_samples: int, info: Any | None = None
+    row: dict[str, Any],
+    start_sample: int,
+    num_samples: int,
+    info: AudioMetadata | None = None,
 ) -> torch.Tensor:
-    info = torchaudio.info(row["audio_path"]) if info is None else info
+    info = _audio_metadata(row) if info is None else info
     if info.sample_rate == 16_000:
-        waveform, _ = torchaudio.load(
+        waveform, sample_rate = torchaudio.load(
             row["audio_path"], frame_offset=start_sample, num_frames=num_samples
         )
     else:
         waveform, sample_rate = torchaudio.load(row["audio_path"])
         waveform = torchaudio.functional.resample(waveform, sample_rate, 16_000)
         waveform = waveform[:, start_sample : start_sample + num_samples]
+    if sample_rate != info.sample_rate:
+        raise RuntimeError(
+            f"Audio sample rate differs from manifest for {row['audio_path']}: "
+            f"expected {info.sample_rate}, decoded {sample_rate}"
+        )
     if waveform.shape[0] != 1:
         waveform = waveform.mean(0, keepdim=True)
     if waveform.shape[-1] < num_samples:
@@ -73,7 +105,7 @@ def _crop_view(
     hop_length: int,
     start: int,
     frames: int,
-    info: Any,
+    info: AudioMetadata,
 ) -> dict[str, Any]:
     result = {
         "waveform": _load_audio_crop(row, start * hop_length, frames * hop_length, info=info),
@@ -101,7 +133,7 @@ def load_view(
     crop_seed: int | None = None,
 ) -> dict[str, Any]:
     tensors = _load_view_tensors(row)
-    info = torchaudio.info(row["audio_path"])
+    info = _audio_metadata(row)
     available = _available_frames(row, tensors, hop_length, info)
     frames = min(available, segment_frames)
     start = _crop_start(available, frames, crop_seed) if random_crop else 0
@@ -136,8 +168,8 @@ class PairDataset(Dataset):
         row = self.rows[index]
         source_tensors = _load_view_tensors(row["source"])
         sa_tensors = _load_view_tensors(row["sa"])
-        source_info = torchaudio.info(row["source"]["audio_path"])
-        sa_info = torchaudio.info(row["sa"]["audio_path"])
+        source_info = _audio_metadata(row["source"])
+        sa_info = _audio_metadata(row["sa"])
         source_available = _available_frames(
             row["source"], source_tensors, self.hop_length, source_info
         )

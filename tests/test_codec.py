@@ -7,7 +7,7 @@ import torchaudio
 
 from xvc2_codec.audit import audit_manifests
 from xvc2_codec.config import LossConfig, ScheduleConfig
-from xvc2_codec.data import PairDataset, TrainingStepDataset, _load_audio_crop
+from xvc2_codec.data import PairDataset, TrainingStepDataset, _load_audio_crop, load_view
 from xvc2_codec.losses import ReconstructionLoss
 from xvc2_codec.model import LargeStreamingCodec
 from xvc2_codec.schedule import weights_at
@@ -177,6 +177,34 @@ def test_non_16khz_crop_matches_full_resample(tmp_path: Path) -> None:
     resampled = torchaudio.functional.resample(full, sample_rate, 16_000)
     cropped = _load_audio_crop({"audio_path": str(audio)}, 321, 2048)
     torch.testing.assert_close(cropped, resampled[:, 321 : 321 + 2048])
+
+
+def test_load_view_uses_manifest_audio_metadata(tmp_path: Path, monkeypatch) -> None:
+    audio = tmp_path / "audio.wav"
+    frames = 10
+    with wave.open(str(audio), "wb") as stream:
+        stream.setnchannels(1)
+        stream.setsampwidth(2)
+        stream.setframerate(16_000)
+        stream.writeframes(b"\x00\x00" * frames * 320)
+    hidden = tmp_path / "hidden.pt"
+    torch.save(torch.zeros(frames, 4), hidden)
+    row = {
+        "audio_path": str(audio),
+        "audio_sample_rate": 16_000,
+        "audio_num_frames": frames * 320,
+        "student_hidden_path": str(hidden),
+    }
+    monkeypatch.setattr(
+        torchaudio,
+        "info",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected info")),
+    )
+
+    loaded = load_view(row, hop_length=320, segment_frames=5, random_crop=False)
+
+    assert loaded["waveform"].shape == (1, 1_600)
+    assert loaded["student_hidden"].shape == (5, 4)
 
 
 def test_manifest_audit_accepts_aligned_cache(tmp_path: Path, capsys) -> None:

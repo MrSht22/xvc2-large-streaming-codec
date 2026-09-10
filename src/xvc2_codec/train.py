@@ -301,15 +301,22 @@ def main() -> None:
     interval_started = time.monotonic()
     interval_audio_seconds = 0.0
     interval_data_wait = 0.0
+    interval_maximum_data_wait = 0.0
+    interval_source_steps = 0
+    interval_pair_steps = 0
     interval_steps = 0
     iterator = iter(loader)
     while step < end_step:
         wait_started = time.monotonic()
         prepared = next(iterator)
-        interval_data_wait += time.monotonic() - wait_started
+        data_wait = time.monotonic() - wait_started
+        interval_data_wait += data_wait
+        interval_maximum_data_wait = max(interval_maximum_data_wait, data_wait)
         next_step = int(prepared["step"])
         weights = weights_at(next_step, config.schedule, config.loss)
         choose_pair = prepared["kind"] == "pair"
+        interval_pair_steps += int(choose_pair)
+        interval_source_steps += int(not choose_pair)
         views = ("source", "sa") if choose_pair else ("source",)
         cpu_batch = prepared["batch"]
         cpu_batches = cpu_batch if choose_pair else {"source": cpu_batch}
@@ -413,6 +420,9 @@ def main() -> None:
                 [interval_audio_seconds, interval_data_wait], device=device, dtype=torch.float64
             )
             elapsed_tensor = torch.tensor(elapsed, device=device, dtype=torch.float64)
+            maximum_data_wait = torch.tensor(
+                interval_maximum_data_wait, device=device, dtype=torch.float64
+            )
             peak_memory = torch.tensor(
                 torch.cuda.max_memory_allocated(device) if device.type == "cuda" else 0,
                 device=device,
@@ -421,6 +431,7 @@ def main() -> None:
             if world_size > 1:
                 dist.all_reduce(performance, op=dist.ReduceOp.SUM)
                 dist.all_reduce(elapsed_tensor, op=dist.ReduceOp.MAX)
+                dist.all_reduce(maximum_data_wait, op=dist.ReduceOp.MAX)
                 dist.all_reduce(peak_memory, op=dist.ReduceOp.MAX)
             if rank == 0:
                 print(
@@ -444,6 +455,11 @@ def main() -> None:
                             "mean_data_wait_seconds_per_rank_step": float(
                                 performance[1] / (world_size * interval_steps)
                             ),
+                            "maximum_data_wait_seconds_per_rank_step": float(
+                                maximum_data_wait
+                            ),
+                            "source_steps_in_interval": interval_source_steps,
+                            "pair_steps_in_interval": interval_pair_steps,
                             "maximum_allocated_gib": float(peak_memory / 1024**3),
                             "weights": weights.__dict__,
                         }
@@ -452,6 +468,9 @@ def main() -> None:
             interval_started = time.monotonic()
             interval_audio_seconds = 0.0
             interval_data_wait = 0.0
+            interval_maximum_data_wait = 0.0
+            interval_source_steps = 0
+            interval_pair_steps = 0
             interval_steps = 0
             if device.type == "cuda":
                 torch.cuda.reset_peak_memory_stats(device)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -10,6 +11,35 @@ import torch
 
 
 DTYPES = {"float16": np.float16, "float32": np.float32}
+
+
+class _BinaryReader:
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self.file_descriptor = -1
+        self.file_descriptor = os.open(path, os.O_RDONLY)
+
+    def read(self, offset: int, size: int) -> bytes:
+        values = os.pread(self.file_descriptor, size, offset)
+        if len(values) != size:
+            raise RuntimeError(
+                f"Partial cache read from {self.path}: expected {size} bytes, got {len(values)}"
+            )
+        return values
+
+    def close(self) -> None:
+        if self.file_descriptor >= 0:
+            os.close(self.file_descriptor)
+            self.file_descriptor = -1
+
+    def __del__(self) -> None:
+        if getattr(self, "file_descriptor", -1) >= 0:
+            self.close()
+
+
+@lru_cache(maxsize=128)
+def _binary_reader(path: str) -> _BinaryReader:
+    return _BinaryReader(path)
 
 
 def _torch_tensor(path: str, key: str | None) -> torch.Tensor:
@@ -55,15 +85,16 @@ class TemporalCache:
         numpy_dtype = DTYPES.get(self.dtype)
         if numpy_dtype is None:
             raise ValueError(f"Unsupported cache dtype: {self.dtype}")
-        byte_offset = (self.offset_frames + start) * self.dimension * np.dtype(numpy_dtype).itemsize
-        values = np.memmap(
-            Path(self.path).expanduser(),
-            mode="r",
+        item_size = np.dtype(numpy_dtype).itemsize
+        byte_offset = (self.offset_frames + start) * self.dimension * item_size
+        byte_count = count * self.dimension * item_size
+        path = os.path.abspath(os.path.expanduser(self.path))
+        values = np.frombuffer(
+            _binary_reader(path).read(byte_offset, byte_count),
             dtype=numpy_dtype,
-            offset=byte_offset,
-            shape=(count, self.dimension),
+            count=count * self.dimension,
         )
-        return torch.from_numpy(np.asarray(values).copy()).float()
+        return torch.from_numpy(values.reshape(count, self.dimension).copy()).float()
 
 
 def temporal_cache(row: dict[str, Any], prefix: str, key: str) -> TemporalCache | None:

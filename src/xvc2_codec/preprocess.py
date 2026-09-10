@@ -959,6 +959,17 @@ def cache_fields(row: dict[str, Any]) -> dict[str, Any]:
     return {name: row[name] for name in names}
 
 
+def audio_fields(metadata: dict[str, Any]) -> dict[str, int]:
+    sample_rate = metadata.get("sample_rate")
+    num_frames = metadata.get("num_frames")
+    if sample_rate is None or num_frames is None:
+        return {}
+    return {
+        "audio_sample_rate": int(sample_rate),
+        "audio_num_frames": int(num_frames),
+    }
+
+
 def command_finalize(args: argparse.Namespace) -> None:
     source_rows = read_jsonl(args.source_manifest)
     pair_rows = read_jsonl(args.pair_manifest)
@@ -988,7 +999,12 @@ def command_finalize(args: argparse.Namespace) -> None:
         raise ValueError(f"Expected {SPEAKER_DIM}-d GST speaker targets")
 
     def view(
-        row: dict[str, Any], role: str, audio_path: str, speaker_path: Path, speaker_index: int
+        row: dict[str, Any],
+        role: str,
+        audio_path: str,
+        audio_metadata: dict[str, Any],
+        speaker_path: Path,
+        speaker_index: int,
     ) -> dict[str, Any]:
         item_id = stable_item_id(role, str(row["utterance_id"]), audio_path)
         if item_id not in student:
@@ -997,6 +1013,7 @@ def command_finalize(args: argparse.Namespace) -> None:
             "utterance_id": str(row["utterance_id"]),
             "speaker_id": str(row["speaker_id"]),
             "audio_path": str(Path(audio_path).expanduser().resolve()),
+            **audio_fields(audio_metadata),
             **cache_fields(student[item_id]),
             "speaker_target_path": str(speaker_path.resolve()),
             "speaker_target_index": speaker_index,
@@ -1009,7 +1026,14 @@ def command_finalize(args: argparse.Namespace) -> None:
         if speaker_id not in source_mapping:
             raise KeyError(f"Missing source speaker vector for {speaker_id}")
         source_output.append(
-            view(row, "source", str(row["audio_path"]), source_path, source_mapping[speaker_id])
+            view(
+                row,
+                "source",
+                str(row["audio_path"]),
+                row,
+                source_path,
+                source_mapping[speaker_id],
+            )
         )
     pair_output = []
     sa_path = args.speaker_cache_dir / "sa_speaker_vectors.pt"
@@ -1030,9 +1054,21 @@ def command_finalize(args: argparse.Namespace) -> None:
                     aligned["alignment_phone_argmax_agreement"]
                 ),
                 "source": view(
-                    row, "pair-source", source_audio, source_path, source_mapping[speaker_id]
+                    row,
+                    "pair-source",
+                    source_audio,
+                    row.get("source_audio", {}),
+                    source_path,
+                    source_mapping[speaker_id],
                 ),
-                "sa": view(row, "pair-sa", sa_audio, sa_path, sa_mapping[utterance_id]),
+                "sa": view(
+                    row,
+                    "pair-sa",
+                    sa_audio,
+                    row.get("anonymized_audio", {}),
+                    sa_path,
+                    sa_mapping[utterance_id],
+                ),
             }
         )
     args.output_dir.mkdir(parents=True, exist_ok=True)

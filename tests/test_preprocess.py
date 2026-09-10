@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from xvc2_codec.cache import temporal_cache, vector_cache
+from xvc2_codec.cache import _binary_reader, temporal_cache, vector_cache
 from xvc2_codec.audit import audit_manifests
 from xvc2_codec.config import CodecConfig
 from xvc2_codec.data import PairDataset
@@ -64,6 +64,7 @@ def test_configure_offline_silero_hub_uses_installed_package(monkeypatch) -> Non
 
 
 def test_sharded_cache_reads_only_requested_offset(tmp_path: Path) -> None:
+    _binary_reader.cache_clear()
     path = tmp_path / "cache.bin"
     values = np.arange(60, dtype=np.float16).reshape(20, 3)
     values.tofile(path)
@@ -77,6 +78,10 @@ def test_sharded_cache_reads_only_requested_offset(tmp_path: Path) -> None:
     cache = temporal_cache(row, "student_hidden", "student_hidden")
     assert cache is not None
     torch.testing.assert_close(cache.read(2, 4), torch.from_numpy(values[7:11]).float())
+    torch.testing.assert_close(cache.read(3, 2), torch.from_numpy(values[8:10]).float())
+    assert _binary_reader.cache_info().misses == 1
+    assert _binary_reader.cache_info().hits == 1
+    _binary_reader.cache_clear()
 
 
 def test_indexed_vector_cache(tmp_path: Path) -> None:
@@ -196,12 +201,16 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
         "speaker_id": "s1",
         "audio_path": str(audio),
         "duration_seconds": 0.2,
+        "sample_rate": 16_000,
+        "num_frames": 3_200,
     }
     pair_row = {
         "utterance_id": "u1",
         "speaker_id": "s1",
         "normalized_source_audio_path": str(audio),
         "anonymized_audio_path": str(sa),
+        "source_audio": {"sample_rate": 16_000, "num_frames": 3_200},
+        "anonymized_audio": {"sample_rate": 16_000, "num_frames": 3_200},
     }
     source_manifest, pair_manifest = tmp_path / "source.jsonl", tmp_path / "pair.jsonl"
     write_jsonl(source_manifest, [source_row])
@@ -275,6 +284,10 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
     source = json.loads((output / "source_train_cache.jsonl").read_text())
     pair = json.loads((output / "pair_train_cache.jsonl").read_text())
     assert source["speaker_target_index"] == 0
+    assert source["audio_sample_rate"] == 16_000
+    assert source["audio_num_frames"] == 3_200
+    assert pair["source"]["audio_sample_rate"] == 16_000
+    assert pair["sa"]["audio_num_frames"] == 3_200
     assert pair["source"]["student_hidden_offset_frames"] == 10
     assert pair["sa"]["student_hidden_offset_frames"] == 20
     assert pair["alignment_lag_frames"] == -2
