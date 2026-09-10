@@ -201,8 +201,11 @@ def test_manifest_audit_accepts_aligned_cache(tmp_path: Path, capsys) -> None:
     pair = tmp_path / "pair.jsonl"
     source.write_text(json.dumps(view) + "\n")
     pair.write_text(json.dumps({"source": view, "sa": view}) + "\n")
-    report = audit_manifests(source, pair, config, speaker_target_dim=6, progress_every=1)
+    report = audit_manifests(
+        source, pair, config, speaker_target_dim=6, progress_every=1, num_workers=2
+    )
     assert report["status"] == "PASS"
+    assert report["num_workers"] == 2
     progress = capsys.readouterr().out
     assert "audit_progress stage=source items=1/1 failures=0" in progress
     assert "audit_progress stage=pair items=1/1 failures=0" in progress

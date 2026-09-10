@@ -5,6 +5,7 @@ import json
 import time
 import wave
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +91,7 @@ def audit_manifests(
     max_items: int | None = None,
     alignment_tolerance: int = 1,
     progress_every: int | None = None,
+    num_workers: int = 1,
 ) -> dict[str, Any]:
     failures: list[str] = []
     counters: Counter[str] = Counter()
@@ -111,50 +113,70 @@ def audit_manifests(
             flush=True,
         )
 
-    for index, row in enumerate(source_selected):
+    def audit_source(item: tuple[int, dict[str, Any]]) -> tuple[int, dict[str, Any], list[str]]:
+        index, row = item
         label = f"source:{index}"
         item_failures, _ = audit_view(row, label, config, speaker_target_dim, alignment_tolerance)
-        failures.extend(item_failures)
-        key = str(row.get("utterance_id") or row.get("audio_path"))
-        if key in seen:
-            failures.append(f"{label}:duplicate={key}")
-        seen.add(key)
-        counters["source_views_scanned"] += 1
-        progress("source", index + 1, len(source_selected), index + 1 == len(source_selected))
-    stage_started = time.monotonic()
-    for index, row in enumerate(pair_selected):
+        return index, row, item_failures
+
+    def audit_pair(item: tuple[int, dict[str, Any]]) -> tuple[int, list[str], int]:
+        index, row = item
+        item_failures = []
+        views_scanned = 0
         if not isinstance(row.get("source"), dict) or not isinstance(row.get("sa"), dict):
-            failures.append(f"pair:{index}:requires_source_and_sa_objects")
-            progress("pair", index + 1, len(pair_selected), index + 1 == len(pair_selected))
-            continue
+            return index, [f"pair:{index}:requires_source_and_sa_objects"], views_scanned
         pair_details = []
         for view in ("source", "sa"):
             label = f"pair:{index}:{view}"
-            item_failures, details = audit_view(
+            view_failures, details = audit_view(
                 row[view], label, config, speaker_target_dim, alignment_tolerance
             )
-            failures.extend(item_failures)
+            item_failures.extend(view_failures)
             pair_details.append(details)
-            counters["pair_views_scanned"] += 1
-        if len(pair_details) == 2:
-            source_hidden = pair_details[0].get("student_hidden_path")
-            sa_hidden = pair_details[1].get("student_hidden_path")
-            if source_hidden and sa_hidden:
-                if "alignment_lag_frames" in row:
-                    lag = int(row["alignment_lag_frames"])
-                    overlap = min(source_hidden[0] - max(-lag, 0), sa_hidden[0] - max(lag, 0))
-                    if overlap <= 0:
-                        failures.append(f"pair:{index}:no_overlap_after_lag={lag}")
-                elif abs(source_hidden[0] - sa_hidden[0]) > alignment_tolerance:
-                    failures.append(
-                        f"pair:{index}:source_sa_frame_mismatch={source_hidden[0]}:{sa_hidden[0]}"
-                    )
-        progress("pair", index + 1, len(pair_selected), index + 1 == len(pair_selected))
+            views_scanned += 1
+        source_hidden = pair_details[0].get("student_hidden_path")
+        sa_hidden = pair_details[1].get("student_hidden_path")
+        if source_hidden and sa_hidden:
+            if "alignment_lag_frames" in row:
+                lag = int(row["alignment_lag_frames"])
+                overlap = min(source_hidden[0] - max(-lag, 0), sa_hidden[0] - max(lag, 0))
+                if overlap <= 0:
+                    item_failures.append(f"pair:{index}:no_overlap_after_lag={lag}")
+            elif abs(source_hidden[0] - sa_hidden[0]) > alignment_tolerance:
+                item_failures.append(
+                    f"pair:{index}:source_sa_frame_mismatch={source_hidden[0]}:{sa_hidden[0]}"
+                )
+        return index, item_failures, views_scanned
+
+    with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="codec-audit") as executor:
+        def bounded_map(function: Any, rows: list[dict[str, Any]]) -> Any:
+            window = num_workers * 8
+            for begin in range(0, len(rows), window):
+                items = enumerate(rows[begin : begin + window], start=begin)
+                yield from executor.map(function, items)
+
+        source_results = bounded_map(audit_source, source_selected)
+        for index, row, item_failures in source_results:
+            failures.extend(item_failures)
+            key = str(row.get("utterance_id") or row.get("audio_path"))
+            if key in seen:
+                failures.append(f"source:{index}:duplicate={key}")
+            seen.add(key)
+            counters["source_views_scanned"] += 1
+            progress("source", index + 1, len(source_selected), index + 1 == len(source_selected))
+
+        stage_started = time.monotonic()
+        pair_results = bounded_map(audit_pair, pair_selected)
+        for index, item_failures, views_scanned in pair_results:
+            failures.extend(item_failures)
+            counters["pair_views_scanned"] += views_scanned
+            progress("pair", index + 1, len(pair_selected), index + 1 == len(pair_selected))
     return {
         "source_manifest": str(source_path),
         "pair_manifest": str(pair_path),
         "source_rows_total": len(source_rows),
         "pair_rows_total": len(pair_rows),
+        "num_workers": num_workers,
         **counters,
         "failures": failures,
         "status": "PASS" if not failures else "FAIL",
@@ -170,9 +192,10 @@ def main() -> None:
     parser.add_argument("--max-items", type=int)
     parser.add_argument("--alignment-tolerance-frames", type=int, default=1)
     parser.add_argument("--progress-every", type=int, default=1000)
+    parser.add_argument("--num-workers", type=int, default=1)
     args = parser.parse_args()
-    if args.progress_every <= 0:
-        parser.error("--progress-every must be positive")
+    if args.progress_every <= 0 or args.num_workers <= 0:
+        parser.error("--progress-every and --num-workers must be positive")
     report = audit_manifests(
         args.source_manifest.resolve(),
         args.pair_manifest.resolve(),
@@ -181,6 +204,7 @@ def main() -> None:
         args.max_items,
         args.alignment_tolerance_frames,
         args.progress_every,
+        args.num_workers,
     )
     print(json.dumps(report, sort_keys=True))
     print(f"codec_manifest_audit={report['status']}")
