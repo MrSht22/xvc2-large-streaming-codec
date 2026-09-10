@@ -612,6 +612,41 @@ def embedding_dirs(shard_dir: Path, level: str) -> tuple[Path, Path]:
     return source, anonymous
 
 
+def configure_offline_silero_hub() -> None:
+    """Route VoicePrivacy's Silero torch.hub request to the installed package."""
+    try:
+        from silero_vad import (
+            VADIterator,
+            collect_chunks,
+            get_speech_timestamps,
+            load_silero_vad,
+            read_audio,
+            save_audio,
+        )
+    except ImportError as error:
+        raise RuntimeError(
+            "silero-vad is required for offline GST speaker extraction; "
+            "install sa_generation/requirements-sttts.txt"
+        ) from error
+
+    original_hub_load = torch.hub.load
+
+    def offline_hub_load(repo_or_dir: str, model: str, *args: Any, **kwargs: Any) -> Any:
+        if repo_or_dir == "snakers4/silero-vad" and model == "silero_vad":
+            vad_model = load_silero_vad(onnx=kwargs.get("onnx", False))
+            utilities = (
+                get_speech_timestamps,
+                save_audio,
+                read_audio,
+                VADIterator,
+                collect_chunks,
+            )
+            return vad_model, utilities
+        return original_hub_load(repo_or_dir, model, *args, **kwargs)
+
+    torch.hub.load = offline_hub_load
+
+
 def consolidate_sa_vectors(sa_run_dir: Path, pair_manifest: Path, output_dir: Path) -> int:
     metadata = json.loads((sa_run_dir / "parallel_run_metadata.json").read_text(encoding="utf-8"))
     level = str(metadata["anonymization_level"])
@@ -656,6 +691,7 @@ def consolidate_sa_vectors(sa_run_dir: Path, pair_manifest: Path, output_dir: Pa
 def command_extract_speakers(args: argparse.Namespace) -> None:
     vendor = args.vendor_dir.expanduser().resolve()
     model_path = args.models_dir.expanduser().resolve() / "tts/Embedding/embedding_function.pt"
+    configure_offline_silero_hub()
     sys.path.insert(0, str(vendor))
     from anonymization.modules.sttts.speaker_embeddings.speaker_extraction import SpeakerExtraction
 

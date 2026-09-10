@@ -1,5 +1,7 @@
 import argparse
 import json
+import sys
+import types
 import wave
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from xvc2_codec.preprocess import (
     cache_fields,
     command_finalize,
     command_plan,
+    configure_offline_silero_hub,
     extract_shard,
     extraction_batches,
     lagged_frame_metrics,
@@ -32,6 +35,32 @@ def write_wav(path: Path, seconds: float = 0.2) -> None:
         stream.setsampwidth(2)
         stream.setframerate(16_000)
         stream.writeframes(b"\x00\x00" * round(seconds * 16_000))
+
+
+def test_configure_offline_silero_hub_uses_installed_package(monkeypatch) -> None:
+    vad_model = object()
+    utilities = tuple(object() for _ in range(5))
+    module = types.ModuleType("silero_vad")
+    module.load_silero_vad = lambda onnx=False: (vad_model, onnx)
+    (
+        module.get_speech_timestamps,
+        module.save_audio,
+        module.read_audio,
+        module.VADIterator,
+        module.collect_chunks,
+    ) = utilities
+    monkeypatch.setitem(sys.modules, "silero_vad", module)
+    fallback = object()
+    monkeypatch.setattr(torch.hub, "load", lambda *args, **kwargs: fallback)
+
+    configure_offline_silero_hub()
+
+    loaded_model, loaded_utilities = torch.hub.load(
+        "snakers4/silero-vad", "silero_vad", onnx=True
+    )
+    assert loaded_model == (vad_model, True)
+    assert loaded_utilities == utilities
+    assert torch.hub.load("another/repository", "model") is fallback
 
 
 def test_sharded_cache_reads_only_requested_offset(tmp_path: Path) -> None:
