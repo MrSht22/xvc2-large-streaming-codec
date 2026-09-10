@@ -210,6 +210,9 @@ class SpeakerExtraction:
                 missing_utterances = list(set(utterances) - set(speaker_embeddings.identifiers2idx.keys()))
                 if len(missing_utterances) == 0:
                     speaker_embeddings.save_vectors(utt_level_results_dir)
+                    if emb_level == 'spk':
+                        speaker_embeddings = speaker_embeddings.convert_to_spk_level()
+                        speaker_embeddings.save_vectors(final_results_dir)
             else:
                 speaker_embeddings = SpeakerEmbeddings(vec_type=self.vec_type, emb_level='utt', device=device)
                 missing_utterances = utterances
@@ -244,7 +247,8 @@ class SpeakerExtraction:
             if len(add_emb_instance) == 0:
                 continue
             identifiers = [add_emb_instance.idx2identifiers[i] for i in range(len(add_emb_instance))]
-            main_emb_instance.add_vectors(identifiers=identifiers, vectors=add_emb_instance.vectors,
+            vectors = add_emb_instance.vectors.to(main_emb_instance.device)
+            main_emb_instance.add_vectors(identifiers=identifiers, vectors=vectors,
                                           speakers=add_emb_instance.original_speakers, genders=add_emb_instance.genders)
         return main_emb_instance
 
