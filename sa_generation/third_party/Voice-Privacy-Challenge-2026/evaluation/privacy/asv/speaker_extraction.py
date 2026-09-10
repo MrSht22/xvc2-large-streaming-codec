@@ -5,9 +5,8 @@ from tqdm import tqdm
 from pathlib import Path
 import torch
 import torchaudio
-from tqdm.contrib.concurrent import process_map
+from tqdm.contrib.concurrent import thread_map
 import time
-from torch.multiprocessing import set_start_method
 from itertools import repeat
 
 from .speechbrain_vectors import SpeechBrainVectors
@@ -15,7 +14,6 @@ from .utils import normalize_wave
 from .speaker_embeddings import SpeakerEmbeddings
 from utils import read_kaldi_format, remove_contents_in_dir, setup_logger
 
-set_start_method('spawn', force=True)
 logger = setup_logger(__name__)
 
 
@@ -153,7 +151,7 @@ class SpeakerExtraction:
                 sleeps = [10 * i for i in range(self.n_processes)]
                 utt_info_jobs = [{k: v for k, v in list(utt_info.items())[i::self.n_processes]}
                                  for i in range(self.n_processes)]
-                # multiprocessing
+                # Keep each per-device JIT VAD/model local; these objects cannot be pickled.
                 params = zip(utt_info_jobs,  # utterances to extract speaker emb from
                              self.extractors, # extractors to use for extraction
                              sleeps, # avoid starting all processes at same time
@@ -162,7 +160,7 @@ class SpeakerExtraction:
                              repeat(utt_level_results_dir),  # where to store utt level results
                              repeat(self.save_intermediate), # whether to save intermediate results
                              list(range(self.n_processes)))  # job_id
-                job_spk_embeddings = process_map(extraction_job, params, max_workers=self.n_processes)
+                job_spk_embeddings = thread_map(extraction_job, params, max_workers=self.n_processes)
             else:
                 params = [utt_info, self.extractors[0], 0, self.devices[0], self.vec_type, utt_level_results_dir,
                           self.save_intermediate, None]
