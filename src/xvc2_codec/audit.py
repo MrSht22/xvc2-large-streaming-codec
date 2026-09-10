@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import wave
 from collections import Counter
 from pathlib import Path
@@ -88,6 +89,7 @@ def audit_manifests(
     speaker_target_dim: int,
     max_items: int | None = None,
     alignment_tolerance: int = 1,
+    progress_every: int | None = None,
 ) -> dict[str, Any]:
     failures: list[str] = []
     counters: Counter[str] = Counter()
@@ -96,6 +98,19 @@ def audit_manifests(
     pair_rows = read_jsonl(pair_path)
     source_selected = source_rows[:max_items] if max_items is not None else source_rows
     pair_selected = pair_rows[:max_items] if max_items is not None else pair_rows
+    stage_started = time.monotonic()
+
+    def progress(stage: str, completed: int, total: int, force: bool = False) -> None:
+        if progress_every is None or (not force and completed % progress_every):
+            return
+        elapsed = max(time.monotonic() - stage_started, 1e-6)
+        print(
+            f"audit_progress stage={stage} items={completed}/{total} "
+            f"failures={len(failures)} elapsed_seconds={elapsed:.1f} "
+            f"items_per_second={completed / elapsed:.2f}",
+            flush=True,
+        )
+
     for index, row in enumerate(source_selected):
         label = f"source:{index}"
         item_failures, _ = audit_view(row, label, config, speaker_target_dim, alignment_tolerance)
@@ -105,9 +120,12 @@ def audit_manifests(
             failures.append(f"{label}:duplicate={key}")
         seen.add(key)
         counters["source_views_scanned"] += 1
+        progress("source", index + 1, len(source_selected), index + 1 == len(source_selected))
+    stage_started = time.monotonic()
     for index, row in enumerate(pair_selected):
         if not isinstance(row.get("source"), dict) or not isinstance(row.get("sa"), dict):
             failures.append(f"pair:{index}:requires_source_and_sa_objects")
+            progress("pair", index + 1, len(pair_selected), index + 1 == len(pair_selected))
             continue
         pair_details = []
         for view in ("source", "sa"):
@@ -131,6 +149,7 @@ def audit_manifests(
                     failures.append(
                         f"pair:{index}:source_sa_frame_mismatch={source_hidden[0]}:{sa_hidden[0]}"
                     )
+        progress("pair", index + 1, len(pair_selected), index + 1 == len(pair_selected))
     return {
         "source_manifest": str(source_path),
         "pair_manifest": str(pair_path),
@@ -150,7 +169,10 @@ def main() -> None:
     parser.add_argument("--speaker-target-dim", type=int, required=True)
     parser.add_argument("--max-items", type=int)
     parser.add_argument("--alignment-tolerance-frames", type=int, default=1)
+    parser.add_argument("--progress-every", type=int, default=1000)
     args = parser.parse_args()
+    if args.progress_every <= 0:
+        parser.error("--progress-every must be positive")
     report = audit_manifests(
         args.source_manifest.resolve(),
         args.pair_manifest.resolve(),
@@ -158,6 +180,7 @@ def main() -> None:
         args.speaker_target_dim,
         args.max_items,
         args.alignment_tolerance_frames,
+        args.progress_every,
     )
     print(json.dumps(report, sort_keys=True))
     print(f"codec_manifest_audit={report['status']}")
