@@ -8,6 +8,7 @@ import torchaudio
 from xvc2_codec.audit import audit_manifests
 from xvc2_codec.config import LossConfig, ScheduleConfig
 from xvc2_codec.data import PairDataset, TrainingStepDataset, _load_audio_crop, load_view
+from xvc2_codec.ema import ExponentialMovingAverage
 from xvc2_codec.losses import ReconstructionLoss
 from xvc2_codec.model import LargeStreamingCodec
 from xvc2_codec.schedule import weights_at
@@ -43,6 +44,26 @@ class CountingModel(torch.nn.Module):
     def forward(self, waveform: torch.Tensor, student_hidden: torch.Tensor):
         self.calls += 1
         return {"reconstruction": waveform + student_hidden[:, :1, :1]}
+
+
+def test_ema_load_preserves_model_device_and_dtype() -> None:
+    model = torch.nn.Linear(2, 2)
+    ema = ExponentialMovingAverage(model, decay=0.9)
+    loaded = {
+        "decay": 0.8,
+        "shadow": {
+            name: torch.full_like(value, 3, dtype=torch.float64)
+            for name, value in model.state_dict().items()
+        },
+    }
+
+    ema.load_state_dict(loaded)
+    ema.update(model)
+
+    assert ema.decay == 0.8
+    for name, value in model.state_dict().items():
+        assert ema.shadow[name].device == value.device
+        assert ema.shadow[name].dtype == value.dtype
 
 
 def test_codec_forward_backward() -> None:
