@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,23 @@ from .cache import temporal_cache, vector_cache
 class AudioMetadata:
     sample_rate: int
     num_frames: int
+
+
+def _load_audio_with_retries(
+    path: str, *, frame_offset: int = 0, num_frames: int = -1
+) -> tuple[torch.Tensor, int]:
+    attempts = 3
+    for attempt in range(1, attempts + 1):
+        try:
+            return torchaudio.load(path, frame_offset=frame_offset, num_frames=num_frames)
+        except (OSError, RuntimeError) as error:
+            if attempt == attempts:
+                raise RuntimeError(
+                    f"Audio decode failed after {attempts} attempts: path={path!r}, "
+                    f"frame_offset={frame_offset}, num_frames={num_frames}, "
+                    f"error_type={type(error).__name__}, error_args={error.args!r}"
+                ) from error
+            time.sleep(0.1 * 2 ** (attempt - 1))
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -80,11 +98,11 @@ def _load_audio_crop(
 ) -> torch.Tensor:
     info = _audio_metadata(row) if info is None else info
     if info.sample_rate == 16_000:
-        waveform, sample_rate = torchaudio.load(
+        waveform, sample_rate = _load_audio_with_retries(
             row["audio_path"], frame_offset=start_sample, num_frames=num_samples
         )
     else:
-        waveform, sample_rate = torchaudio.load(row["audio_path"])
+        waveform, sample_rate = _load_audio_with_retries(row["audio_path"])
         waveform = torchaudio.functional.resample(waveform, sample_rate, 16_000)
         waveform = waveform[:, start_sample : start_sample + num_samples]
     if sample_rate != info.sample_rate:
@@ -265,10 +283,18 @@ class TrainingStepDataset(Dataset):
         indices = random.Random(selection_seed).sample(range(len(dataset)), global_size)
         begin = self.rank * self.batch_size
         indices = indices[begin : begin + self.batch_size]
-        items = [
-            dataset.load(index, selection_seed * 1_000_003 + begin + position)
-            for position, index in enumerate(indices)
-        ]
+        try:
+            items = [
+                dataset.load(index, selection_seed * 1_000_003 + begin + position)
+                for position, index in enumerate(indices)
+            ]
+        except Exception as error:
+            raise RuntimeError(
+                f"Failed to build training batch: step={step}, "
+                f"kind={'pair' if choose_pair else 'source'}, rank={self.rank}, "
+                f"indices={indices}, error_type={type(error).__name__}, "
+                f"error_args={error.args!r}"
+            ) from error
         return {
             "step": step,
             "kind": "pair" if choose_pair else "source",

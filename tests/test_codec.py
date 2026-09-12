@@ -1,10 +1,13 @@
 import json
+import re
 import wave
 from pathlib import Path
 
+import pytest
 import torch
 import torchaudio
 
+import xvc2_codec.data as data_module
 from xvc2_codec.audit import audit_manifests
 from xvc2_codec.config import LossConfig, ScheduleConfig
 from xvc2_codec.data import PairDataset, TrainingStepDataset, _load_audio_crop, load_view
@@ -198,6 +201,46 @@ def test_non_16khz_crop_matches_full_resample(tmp_path: Path) -> None:
     resampled = torchaudio.functional.resample(full, sample_rate, 16_000)
     cropped = _load_audio_crop({"audio_path": str(audio)}, 321, 2048)
     torch.testing.assert_close(cropped, resampled[:, 321 : 321 + 2048])
+
+
+def test_audio_crop_retries_transient_decode_failure(monkeypatch) -> None:
+    calls = 0
+
+    def flaky_load(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise RuntimeError("temporary storage error")
+        return torch.zeros(1, 1_600), 16_000
+
+    monkeypatch.setattr(torchaudio, "load", flaky_load)
+    monkeypatch.setattr(data_module.time, "sleep", lambda _seconds: None)
+    row = {
+        "audio_path": "/shared/audio.wav",
+        "audio_sample_rate": 16_000,
+        "audio_num_frames": 3_200,
+    }
+
+    loaded = _load_audio_crop(row, 0, 1_600)
+
+    assert calls == 3
+    assert loaded.shape == (1, 1_600)
+
+
+def test_audio_crop_reports_path_after_retries(monkeypatch) -> None:
+    def broken_load(*_args, **_kwargs):
+        raise RuntimeError("persistent decode error")
+
+    monkeypatch.setattr(torchaudio, "load", broken_load)
+    monkeypatch.setattr(data_module.time, "sleep", lambda _seconds: None)
+    row = {
+        "audio_path": "/shared/broken.wav",
+        "audio_sample_rate": 16_000,
+        "audio_num_frames": 3_200,
+    }
+
+    with pytest.raises(RuntimeError, match=re.escape("/shared/broken.wav")):
+        _load_audio_crop(row, 320, 1_600)
 
 
 def test_load_view_uses_manifest_audio_metadata(tmp_path: Path, monkeypatch) -> None:
