@@ -63,6 +63,26 @@ def _split_indices(
     return train, val
 
 
+def _split_stratified(
+    labels: torch.Tensor, val_fraction: float, seed: int
+) -> tuple[list[int], list[int]]:
+    if not 0.0 < val_fraction < 1.0:
+        raise ValueError("val_fraction must be in (0, 1)")
+    grouped: dict[int, list[int]] = {}
+    for index, label in enumerate(labels.tolist()):
+        grouped.setdefault(int(label), []).append(index)
+    train: list[int] = []
+    val: list[int] = []
+    for label, indices in sorted(grouped.items()):
+        random.Random(f"{seed}:speaker:{label}").shuffle(indices)
+        if len(indices) < 2:
+            raise ValueError(f"Speaker class {label} has fewer than two utterances")
+        val_count = min(max(1, round(len(indices) * val_fraction)), len(indices) - 1)
+        val.extend(indices[:val_count])
+        train.extend(indices[val_count:])
+    return sorted(train), sorted(val)
+
+
 def _label_map(labels: Iterable[str]) -> dict[str, int]:
     return {label: index for index, label in enumerate(sorted(set(labels)))}
 
@@ -126,10 +146,13 @@ def _extract_source_items(
         hidden = batch["student_hidden"].to(device, non_blocking=True)
         with torch.inference_mode():
             outputs = model(waveform, hidden)
+        z_edit = outputs["z_edit"].transpose(1, 2)
         for position, row in enumerate(rows[begin : begin + len(items)]):
             frames = min(
                 int(items[position]["frames"]),
-                *(int(outputs[name].shape[1]) for name in ("z_inv", "z_dyn", "z_edit")),
+                int(outputs["z_inv"].shape[1]),
+                int(outputs["z_dyn"].shape[1]),
+                int(z_edit.shape[1]),
             )
             phone = batch.get("phone_target")
             if phone is not None:
@@ -141,7 +164,7 @@ def _extract_source_items(
                     speaker_id=str(row["speaker_id"]) if row.get("speaker_id") is not None else None,
                     z_inv=outputs["z_inv"][position, :frames].cpu().float(),
                     z_dyn=outputs["z_dyn"][position, :frames].cpu().float(),
-                    z_edit=outputs["z_edit"][position, :frames].cpu().float(),
+                    z_edit=z_edit[position, :frames].cpu().float(),
                     phone=phone_item,
                 )
             )
@@ -175,15 +198,33 @@ def _pair_consistency(
                 sa["waveform"].to(device, non_blocking=True),
                 sa["student_hidden"].to(device, non_blocking=True),
             )
+        source_latents = {
+            "z_inv": source_output["z_inv"],
+            "z_dyn": source_output["z_dyn"],
+            "z_edit": source_output["z_edit"].transpose(1, 2),
+        }
+        sa_latents = {
+            "z_inv": sa_output["z_inv"],
+            "z_dyn": sa_output["z_dyn"],
+            "z_edit": sa_output["z_edit"].transpose(1, 2),
+        }
         for position, item in enumerate(items):
             frames = int(item["source"]["frames"])
             for name in ("z_inv", "z_dyn", "z_edit"):
-                left = source_output[name][position, :frames].float()
-                right = sa_output[name][position, :frames].float()
+                frames = min(
+                    frames,
+                    int(source_latents[name].shape[1]),
+                    int(sa_latents[name].shape[1]),
+                )
+                left = source_latents[name][position, :frames].float()
+                right = sa_latents[name][position, :frames].float()
                 cosine = F.cosine_similarity(left, right, dim=-1).mean().item()
                 values[f"{name}_cosine"].append(cosine)
             values["z_inv_mse"].append(
-                (source_output["z_inv"][position, :frames].float() - sa_output["z_inv"][position, :frames].float())
+                (
+                    source_latents["z_inv"][position, :frames].float()
+                    - sa_latents["z_inv"][position, :frames].float()
+                )
                 .square()
                 .mean()
                 .item()
@@ -242,6 +283,7 @@ def _train_linear_probe(
     epochs: int,
     batch_size: int,
     learning_rate: float,
+    stratified: bool = False,
 ) -> dict[str, Any]:
     if len(features) == 0:
         return {"status": "SKIP", "reason": "no_labels"}
@@ -257,7 +299,11 @@ def _train_linear_probe(
     label_count = int(labels_tensor.max().item()) + 1
     if label_count < 2:
         return {"status": "SKIP", "reason": "fewer_than_two_classes"}
-    train_items, val_items = _split_indices(item_ids, val_fraction, seed)
+    train_items, val_items = (
+        _split_stratified(labels_tensor, val_fraction, seed)
+        if stratified
+        else _split_indices(item_ids, val_fraction, seed)
+    )
     train_set = set(train_items)
     val_set = set(val_items)
     train_mask = torch.tensor([index in train_set for index in range(len(features))])
@@ -292,6 +338,7 @@ def _train_linear_probe(
         "classes": label_count,
         "accuracy": accuracy,
         "majority_baseline": majority,
+        "uniform_chance_baseline": 1.0 / label_count,
         "accuracy_over_majority": accuracy - majority,
     }
 
@@ -334,6 +381,7 @@ def _speaker_probes(items: list[LatentItem], args: argparse.Namespace) -> dict[s
             args.epochs,
             args.probe_batch_size,
             args.learning_rate,
+            stratified=True,
         )
     return result
 
