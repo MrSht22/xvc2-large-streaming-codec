@@ -20,8 +20,10 @@ def save_checkpoint(path: Path, **payload: Any) -> None:
     os.replace(temporary, path)
 
 
-def load_checkpoint(path: Path) -> dict[str, Any]:
+def load_checkpoint(path: Path, *, restore_rng: bool = True) -> dict[str, Any]:
     payload = torch.load(path, map_location="cpu", weights_only=False)
+    if not restore_rng:
+        return payload
     random.setstate(payload["rng"]["python"])
     torch.set_rng_state(payload["rng"]["torch"])
     if "cuda" in payload["rng"] and torch.cuda.is_available():

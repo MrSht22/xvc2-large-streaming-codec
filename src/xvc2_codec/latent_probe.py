@@ -77,7 +77,7 @@ def _sample_rows(rows: list[dict[str, Any]], max_items: int | None, seed: int) -
 
 def _load_model(config_path: Path, checkpoint_path: Path, weights: str, device: torch.device) -> nn.Module:
     config = load_config(config_path)
-    payload = load_checkpoint(checkpoint_path)
+    payload = load_checkpoint(checkpoint_path, restore_rng=False)
     if payload.get("config") != config.to_dict():
         raise RuntimeError("Checkpoint config differs from the supplied config")
     model = TrainableCodec(LargeStreamingCodec(config.model), _speaker_target_dim(payload))
