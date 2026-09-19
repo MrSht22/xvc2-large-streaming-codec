@@ -19,6 +19,7 @@ xvc2-codec-env-check = "xvc2_codec.env_check:main"
 xvc2-codec-train = "xvc2_codec.train:main"
 xvc2-codec-smoke = "xvc2_codec.smoke:main"
 xvc2-codec-preprocess = "xvc2_codec.preprocess:main"
+xvc2-codec-latent-probe = "xvc2_codec.latent_probe:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
