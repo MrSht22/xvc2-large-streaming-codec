@@ -7,7 +7,7 @@ name = "xvc2-large-streaming-codec"
 version = "0.1.0"
 description = "Large continuous streaming codec for X-VC2"
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.23", "PyYAML>=6.0", "torch>=2.4", "torchaudio>=2.4"]
+dependencies = ["numpy>=1.23", "PyYAML>=6.0", "torch>=2.4", "torchaudio>=2.4", "tqdm>=4.65"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.12"]

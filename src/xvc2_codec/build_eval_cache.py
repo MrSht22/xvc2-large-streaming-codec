@@ -4,30 +4,36 @@ import argparse
 import hashlib
 import json
 import random
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
+from tqdm import tqdm
+
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if not line.strip():
-            continue
-        value = json.loads(line)
-        if not isinstance(value, dict):
-            raise ValueError(f"Expected an object at {path}:{line_number}")
-        rows.append(value)
+    with path.open("r", encoding="utf-8") as stream:
+        lines = tqdm(stream, desc=f"read {path.name}", unit="lines", file=sys.stderr)
+        for line_number, line in enumerate(lines, 1):
+            if not line.strip():
+                continue
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                raise ValueError(f"Expected an object at {path}:{line_number}")
+            rows.append(value)
     if not rows:
         raise RuntimeError(f"Empty manifest: {path}")
     return rows
 
 
-def write_jsonl(rows: Iterable[dict[str, Any]], path: Path) -> None:
+def write_jsonl(rows: Iterable[dict[str, Any]], path: Path, label: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8") as stream:
-        for row in rows:
+        values = list(rows)
+        for row in tqdm(values, desc=f"write {label}", unit="rows", file=sys.stderr):
             stream.write(json.dumps(row, ensure_ascii=True, sort_keys=True) + "\n")
     temporary.replace(path)
 
@@ -99,12 +105,10 @@ def _exclusion_keys(paths: list[Path]) -> tuple[set[str], set[str]]:
 def _filter_pool(
     rows: list[dict[str, Any]], excluded_utterances: set[str], excluded_audio: set[str]
 ) -> list[dict[str, Any]]:
-    result = [
-        row
-        for row in rows
-        if _utterance_id(row) not in excluded_utterances
-        and _audio_key(row) not in excluded_audio
-    ]
+    result = []
+    for row in tqdm(rows, desc="filter candidate pool", unit="rows", file=sys.stderr):
+        if _utterance_id(row) not in excluded_utterances and _audio_key(row) not in excluded_audio:
+            result.append(row)
     _validate_unique(result, "candidate pool")
     return result
 
@@ -137,7 +141,9 @@ def select_content_rows(
     if speakers > 0:
         speaker_ids = speaker_ids[:speakers]
     selected: list[dict[str, Any]] = []
-    for speaker_id in sorted(speaker_ids):
+    for speaker_id in tqdm(
+        sorted(speaker_ids), desc="select content speakers", unit="speakers", file=sys.stderr
+    ):
         group = _shuffle_group(groups[speaker_id], seed, speaker_id)
         selected.extend(group[:utterances_per_speaker])
     if not selected:
@@ -191,7 +197,9 @@ def select_leakage_rows(
         )
     random.Random(seed).shuffle(eligible)
     selected: list[dict[str, Any]] = []
-    for speaker_id in sorted(eligible[:speakers]):
+    for speaker_id in tqdm(
+        sorted(eligible[:speakers]), desc="select leakage speakers", unit="speakers", file=sys.stderr
+    ):
         selected.extend(
             _chapter_balanced_rows(groups[speaker_id], utterances_per_speaker, seed, speaker_id)
         )
@@ -211,7 +219,7 @@ def _select_pairs(
     indexed = _pair_index(pair_rows)
     selected = []
     missing = []
-    for row in source_rows:
+    for row in tqdm(source_rows, desc=f"match {label} pairs", unit="rows", file=sys.stderr):
         item = indexed.get(_utterance_id(row))
         if item is None:
             missing.append(_utterance_id(row))
@@ -258,11 +266,27 @@ def build_eval_caches(args: argparse.Namespace) -> dict[str, Any]:
     leakage_pairs, _ = _select_pairs(leakage_rows, pair_rows, "leakage selection")
 
     output_dir = args.output_dir.expanduser().resolve()
-    write_jsonl(content_rows, output_dir / "content" / "source_eval_cache.jsonl")
-    write_jsonl(leakage_rows, output_dir / "leakage" / "source_eval_cache.jsonl")
+    write_jsonl(
+        content_rows,
+        output_dir / "content" / "source_eval_cache.jsonl",
+        "content source manifest",
+    )
+    write_jsonl(
+        leakage_rows,
+        output_dir / "leakage" / "source_eval_cache.jsonl",
+        "leakage source manifest",
+    )
     if pair_rows is not None:
-        write_jsonl(content_pairs, output_dir / "content" / "pair_eval_cache.jsonl")
-        write_jsonl(leakage_pairs, output_dir / "leakage" / "pair_eval_cache.jsonl")
+        write_jsonl(
+            content_pairs,
+            output_dir / "content" / "pair_eval_cache.jsonl",
+            "content pair manifest",
+        )
+        write_jsonl(
+            leakage_pairs,
+            output_dir / "leakage" / "pair_eval_cache.jsonl",
+            "leakage pair manifest",
+        )
     report = {
         "status": "PASS",
         "source_manifest": str(args.source_manifest.expanduser().resolve()),

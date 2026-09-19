@@ -96,6 +96,11 @@ python -m xvc2_codec.build_eval_cache \
   2>&1 | tee "$OUT/build.log"
 ```
 
+The builder prints `tqdm` progress bars for manifest reads, candidate-pool
+filtering, speaker selection, pair matching, and each output manifest. The
+progress bars are also captured in `build.log` because stderr is redirected by
+the command above.
+
 If the candidate pool was assembled from a larger source inventory that also
 contains training rows, pass every training manifest to `--exclude-manifest`
 before selection:
