@@ -72,3 +72,35 @@ def test_build_eval_caches_writes_source_and_pair_manifests(tmp_path: Path) -> N
     assert (tmp_path / "out/content/pair_eval_cache.jsonl").exists()
     assert (tmp_path / "out/leakage/source_eval_cache.jsonl").exists()
     assert (tmp_path / "out/leakage/pair_eval_cache.jsonl").exists()
+
+
+def test_build_eval_caches_selects_from_source_pair_intersection(tmp_path: Path) -> None:
+    paired_rows = [
+        source_row(str(speaker), chapter, utterance)
+        for speaker in range(2)
+        for chapter in range(4)
+        for utterance in range(2)
+    ]
+    source_rows = paired_rows + [source_row("unpaired", chapter, utterance) for chapter in range(4) for utterance in range(2)]
+    source_path = tmp_path / "source.jsonl"
+    pair_path = tmp_path / "pair.jsonl"
+    source_path.write_text("\n".join(json.dumps(row) for row in source_rows) + "\n", encoding="utf-8")
+    pair_path.write_text("\n".join(json.dumps(pair_row(row)) for row in paired_rows) + "\n", encoding="utf-8")
+    args = type(
+        "Args",
+        (),
+        {
+            "source_manifest": source_path,
+            "pair_manifest": pair_path,
+            "exclude_manifest": [],
+            "output_dir": tmp_path / "out",
+            "content_speakers": 2,
+            "content_utterances_per_speaker": 2,
+            "leakage_speakers": 2,
+            "leakage_utterances_per_speaker": 4,
+            "seed": 1,
+        },
+    )()
+    report = build_eval_caches(args)
+    assert report["candidate_pool_before_pair_filter"] == len(source_rows)
+    assert report["candidate_pool"]["rows"] == len(paired_rows)

@@ -257,6 +257,12 @@ def build_eval_caches(args: argparse.Namespace) -> dict[str, Any]:
     pair_rows = read_jsonl(args.pair_manifest) if args.pair_manifest else None
     excluded_utterances, excluded_audio = _exclusion_keys(args.exclude_manifest)
     source_pool = _filter_pool(source_rows, excluded_utterances, excluded_audio)
+    source_pool_before_pair_filter = len(source_pool)
+    if pair_rows is not None:
+        pair_ids = {_utterance_id(row) for row in pair_rows}
+        source_pool = [row for row in source_pool if _utterance_id(row) in pair_ids]
+        if not source_pool:
+            raise RuntimeError("No source rows overlap the supplied pair manifest")
     content_rows = select_content_rows(
         source_pool,
         speakers=args.content_speakers,
@@ -302,6 +308,7 @@ def build_eval_caches(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "excluded_manifests": [str(path.expanduser().resolve()) for path in args.exclude_manifest],
         "candidate_pool": _summary(source_pool),
+        "candidate_pool_before_pair_filter": source_pool_before_pair_filter,
         "content": {
             "source": _summary(content_rows),
             "pair": _summary(content_pairs) if pair_rows is not None else None,
