@@ -178,6 +178,10 @@ aligned-transcript-v2 数据已做逐样本长度对齐；Student probe 和全�
 
 ## 当前边界
 
+冻结 Codec 的 latent 内容与 speaker leakage 分析见
+[docs/LATENT_PROBE.md](docs/LATENT_PROBE.md)。该分析只训练小型 probe，不更新 Codec，
+也不把 speaker probe 的 `speaker_id` 解释成匿名 SA identity。
+
 - 连续 latent；没有 RVQ/VQ。
 - 没有 Converter、GRL、cycle loss、source-speaker repel 或 target acoustic memory。
 - 默认只有 complex multi-scale STFT discriminator，没有 MPD。
