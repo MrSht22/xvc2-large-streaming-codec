@@ -86,10 +86,17 @@ def _stable_seed(seed: int, value: str) -> int:
 
 
 def _validate_unique(rows: list[dict[str, Any]], label: str) -> None:
-    ids = [_utterance_id(row) for row in rows]
-    duplicates = sorted({item for item in ids if ids.count(item) > 1})
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for row in rows:
+        item = _utterance_id(row)
+        if item in seen:
+            duplicates.add(item)
+        else:
+            seen.add(item)
     if duplicates:
-        raise ValueError(f"{label} contains duplicate utterance IDs: {duplicates[:5]}")
+        examples = sorted(duplicates)[:5]
+        raise ValueError(f"{label} contains duplicate utterance IDs: {examples}")
 
 
 def _exclusion_keys(paths: list[Path]) -> tuple[set[str], set[str]]:
