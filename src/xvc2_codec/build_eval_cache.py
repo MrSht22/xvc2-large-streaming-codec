@@ -258,9 +258,27 @@ def build_eval_caches(args: argparse.Namespace) -> dict[str, Any]:
     excluded_utterances, excluded_audio = _exclusion_keys(args.exclude_manifest)
     source_pool = _filter_pool(source_rows, excluded_utterances, excluded_audio)
     source_pool_before_pair_filter = len(source_pool)
+    candidate_pool_source = "source_manifest"
+    source_pair_overlap = 0
     if pair_rows is not None:
         pair_ids = {_utterance_id(row) for row in pair_rows}
-        source_pool = [row for row in source_pool if _utterance_id(row) in pair_ids]
+        source_pair_overlap = sum(_utterance_id(row) in pair_ids for row in source_pool)
+        if source_pair_overlap:
+            source_pool = [row for row in source_pool if _utterance_id(row) in pair_ids]
+            candidate_pool_source = "source_manifest_pair_intersection"
+        else:
+            pair_source_rows = []
+            for row in pair_rows:
+                source = row.get("source")
+                if not isinstance(source, dict):
+                    raise RuntimeError(
+                        "Pair manifest has no nested source view and does not overlap source manifest"
+                    )
+                pair_source_rows.append(source)
+            source_pool = _filter_pool(
+                pair_source_rows, excluded_utterances, excluded_audio
+            )
+            candidate_pool_source = "pair_manifest_nested_source"
         if not source_pool:
             raise RuntimeError("No source rows overlap the supplied pair manifest")
     content_rows = select_content_rows(
@@ -306,6 +324,8 @@ def build_eval_caches(args: argparse.Namespace) -> dict[str, Any]:
         "pair_manifest": (
             str(args.pair_manifest.expanduser().resolve()) if args.pair_manifest else None
         ),
+        "candidate_pool_source": candidate_pool_source,
+        "source_pair_overlap": source_pair_overlap,
         "excluded_manifests": [str(path.expanduser().resolve()) for path in args.exclude_manifest],
         "candidate_pool": _summary(source_pool),
         "candidate_pool_before_pair_filter": source_pool_before_pair_filter,
