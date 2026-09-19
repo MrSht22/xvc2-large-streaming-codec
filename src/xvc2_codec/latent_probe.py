@@ -127,8 +127,13 @@ def _extract_source_items(
         with torch.inference_mode():
             outputs = model(waveform, hidden)
         for position, row in enumerate(rows[begin : begin + len(items)]):
-            frames = int(items[position]["frames"])
+            frames = min(
+                int(items[position]["frames"]),
+                *(int(outputs[name].shape[1]) for name in ("z_inv", "z_dyn", "z_edit")),
+            )
             phone = batch.get("phone_target")
+            if phone is not None:
+                frames = min(frames, int(phone.shape[1]))
             phone_item = None if phone is None else phone[position, :frames].cpu().float()
             result.append(
                 LatentItem(
@@ -206,6 +211,11 @@ def _prepare_content(
         return torch.empty(0, 0), torch.empty(0, dtype=torch.long), []
     x = torch.cat(features, dim=0)
     y = torch.cat(labels, dim=0).long()
+    if len(x) != len(y) or len(x) != len(groups):
+        raise RuntimeError(
+            "Content probe alignment mismatch: "
+            f"features={len(x)}, labels={len(y)}, groups={len(groups)}"
+        )
     if len(x) > max_frames:
         generator = torch.Generator().manual_seed(17)
         indices = torch.randperm(len(x), generator=generator)[:max_frames]
@@ -239,6 +249,11 @@ def _train_linear_probe(
         labels_tensor = torch.tensor(labels, dtype=torch.long)
     else:
         labels_tensor = labels.long()
+    if len(features) != len(labels_tensor) or len(features) != len(item_ids):
+        raise RuntimeError(
+            "Linear probe alignment mismatch: "
+            f"features={len(features)}, labels={len(labels_tensor)}, groups={len(item_ids)}"
+        )
     label_count = int(labels_tensor.max().item()) + 1
     if label_count < 2:
         return {"status": "SKIP", "reason": "fewer_than_two_classes"}
