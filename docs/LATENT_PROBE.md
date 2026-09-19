@@ -46,6 +46,87 @@ random crop per utterance and mean-pools the latent over time. Train/validation
 splits are made by utterance id, so frames from the same utterance do not cross
 the split.
 
+## Build two evaluation caches
+
+The cache builder only selects rows and writes new JSONL manifests. It does not
+copy audio, Student hidden shards, or phone caches. The candidate pool must
+already be a held-out finalized cache; do not pass the Codec training manifest
+as both the candidate pool and an exclusion manifest.
+
+The builder creates:
+
+```text
+<output>/content/source_eval_cache.jsonl
+<output>/content/pair_eval_cache.jsonl
+<output>/leakage/source_eval_cache.jsonl
+<output>/leakage/pair_eval_cache.jsonl
+<output>/selection_report.json
+```
+
+The content set is speaker-balanced, phone-labeled, and defaults to 128
+speakers with 4 utterances per speaker. The leakage set defaults to 64 speakers
+with 8 utterances per speaker and selects across distinct chapter ids whenever
+the manifest exposes LibriSpeech-style utterance ids. A speaker must have
+enough rows in the candidate pool or the command fails instead of silently
+producing an invalid leakage set.
+
+On the server, after pushing the cache-builder commit:
+
+```bash
+conda activate ctc-gop
+cd "$CODEC"
+export PYTHONPATH=src
+
+# These must be held-out finalized caches, not the Codec training manifests.
+SOURCE_POOL="$HELDOUT_PREP/manifests/source_eval_pool_cache.jsonl"
+PAIR_POOL="$HELDOUT_PREP/manifests/pair_eval_pool_cache.jsonl"
+OUT="$HELDOUT_PREP/manifests/latent-probe-eval-v2"
+
+mkdir -p "$OUT"
+PYTHONPATH=src \
+python -m xvc2_codec.build_eval_cache \
+  --source-manifest "$SOURCE_POOL" \
+  --pair-manifest "$PAIR_POOL" \
+  --output-dir "$OUT" \
+  --content-speakers 128 \
+  --content-utterances-per-speaker 4 \
+  --leakage-speakers 64 \
+  --leakage-utterances-per-speaker 8 \
+  --seed 1 \
+  2>&1 | tee "$OUT/build.log"
+```
+
+If the candidate pool was assembled from a larger source inventory that also
+contains training rows, pass every training manifest to `--exclude-manifest`
+before selection:
+
+```bash
+  --exclude-manifest "$PREP/manifests/source_train_cache.jsonl" \
+  --exclude-manifest "$PREP/manifests/pair_train_cache.jsonl"
+```
+
+The builder excludes matching utterance ids and audio paths. It also checks
+that selected source rows have matching pair rows. The output
+`selection_report.json` is the first gate: confirm the requested speaker and
+utterance counts before running the latent probe.
+
+For the subsequent probes, use the two directories independently:
+
+```bash
+SOURCE_EVAL="$OUT/content/source_eval_cache.jsonl"
+PAIR_EVAL="$OUT/content/pair_eval_cache.jsonl"
+# Run the content probe with these paths.
+
+SOURCE_EVAL="$OUT/leakage/source_eval_cache.jsonl"
+PAIR_EVAL="$OUT/leakage/pair_eval_cache.jsonl"
+# Run the leakage probe with these paths.
+```
+
+The current latent probe reports both content and speaker probes in one run;
+the separate manifests are intentional. Content analysis needs broad phone and
+speaker coverage, while leakage analysis needs repeated utterances per speaker
+for a meaningful utterance-disjoint validation split.
+
 ## Server command
 
 On the server, after pushing commit `9782f60`:
