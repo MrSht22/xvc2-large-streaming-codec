@@ -16,7 +16,7 @@ from .checkpoint import load_checkpoint
 from .config import load_config
 from .data import PairDataset, SourceDataset, collate_views, read_jsonl
 from .model import LargeStreamingCodec
-from .train import TrainableCodec
+from .train import TrainableCodec, _load_initial_model_state
 
 
 @dataclass
@@ -98,11 +98,17 @@ def _sample_rows(rows: list[dict[str, Any]], max_items: int | None, seed: int) -
 def _load_model(config_path: Path, checkpoint_path: Path, weights: str, device: torch.device) -> nn.Module:
     config = load_config(config_path)
     payload = load_checkpoint(checkpoint_path, restore_rng=False)
-    if payload.get("config") != config.to_dict():
-        raise RuntimeError("Checkpoint config differs from the supplied config")
-    model = TrainableCodec(LargeStreamingCodec(config.model), _speaker_target_dim(payload))
+    checkpoint_config = payload.get("config", {})
+    if checkpoint_config.get("model") != config.model.to_dict():
+        raise RuntimeError("Checkpoint model architecture differs from the supplied config")
+    model = TrainableCodec(
+        LargeStreamingCodec(config.model),
+        _speaker_target_dim(payload),
+        config.loss.dyn_phone_grl_scale,
+        config.loss.edit_phone_grl_scale,
+    )
     state = payload["model"] if weights == "model" else payload["ema"]["shadow"]
-    model.load_state_dict(state, strict=True)
+    _load_initial_model_state(model, state)
     model.to(device).eval()
     for parameter in model.parameters():
         parameter.requires_grad_(False)

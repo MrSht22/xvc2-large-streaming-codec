@@ -138,6 +138,55 @@ def masked_smooth_l1(
     return (values * mask).sum() / mask.sum().clamp_min(1)
 
 
+def masked_phone_kl(
+    predicted: torch.Tensor, target: torch.Tensor, lengths: torch.Tensor
+) -> torch.Tensor:
+    frames = min(predicted.shape[1], target.shape[1])
+    mask = torch.arange(frames, device=predicted.device)[None] < lengths[:, None].clamp_max(
+        frames
+    )
+    values = F.kl_div(
+        predicted[:, :frames].float().log_softmax(-1),
+        target[:, :frames].float().softmax(-1),
+        reduction="none",
+    ).sum(-1)
+    return (values * mask).sum() / mask.sum().clamp_min(1)
+
+
+def prosody_losses(
+    predicted: torch.Tensor, target: torch.Tensor, lengths: torch.Tensor
+) -> dict[str, torch.Tensor]:
+    if predicted.shape[-1] != 4 or target.shape[-1] != 4:
+        raise ValueError("Prosody tensors must use [normalized_f0, vuv, energy, delta_f0]")
+    frames = min(predicted.shape[1], target.shape[1])
+    valid = torch.arange(frames, device=predicted.device)[None] < lengths[:, None].clamp_max(
+        frames
+    )
+    predicted = predicted[:, :frames].float()
+    target = target[:, :frames].float()
+    voiced = target[..., 1] > 0.5
+    voiced_valid = valid & voiced
+    delta_valid = voiced_valid.clone()
+    delta_valid[:, 0] = False
+    delta_valid[:, 1:] &= voiced[:, :-1]
+
+    def smooth_l1(channel: int, mask: torch.Tensor) -> torch.Tensor:
+        values = F.smooth_l1_loss(
+            predicted[..., channel], target[..., channel], reduction="none"
+        )
+        return (values * mask).sum() / mask.sum().clamp_min(1)
+
+    voicing = F.binary_cross_entropy_with_logits(
+        predicted[..., 1], target[..., 1], reduction="none"
+    )
+    return {
+        "normalized_f0": smooth_l1(0, voiced_valid),
+        "voicing": (voicing * valid).sum() / valid.sum().clamp_min(1),
+        "relative_energy": smooth_l1(2, valid),
+        "f0_delta": smooth_l1(3, delta_valid),
+    }
+
+
 def trajectory_correlation_loss(
     predicted: torch.Tensor, target: torch.Tensor, lengths: torch.Tensor
 ) -> torch.Tensor:

@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+import xvc2_codec.preprocess as preprocess_module
 from xvc2_codec.cache import _binary_reader, temporal_cache, vector_cache
 from xvc2_codec.audit import audit_manifests
 from xvc2_codec.config import CodecConfig
@@ -18,9 +19,11 @@ from xvc2_codec.preprocess import (
     command_finalize,
     command_plan,
     configure_offline_silero_hub,
+    extract_prosody_shard,
     extract_shard,
     extraction_batches,
     lagged_frame_metrics,
+    prosody_target,
     stable_item_id,
 )
 
@@ -191,6 +194,47 @@ def test_extract_shard_is_resumable(tmp_path: Path) -> None:
     assert cache is not None and cache.shape == (10, 768)
 
 
+def test_prosody_target_normalizes_tracks_and_masks_delta() -> None:
+    waveform = torch.cat(
+        [torch.full((320,), amplitude) for amplitude in (0.1, 0.2, 0.4, 0.8)]
+    )
+    target = prosody_target(waveform, 4, np.asarray([100.0, 200.0, 0.0, 400.0]))
+    assert target.shape == (4, 4)
+    np.testing.assert_array_equal(target[:, 1], [1.0, 1.0, 0.0, 1.0])
+    assert abs(float(target[[0, 1, 3], 0].mean())) < 1e-6
+    assert abs(float(target[:, 2].mean())) < 1e-6
+    assert target[1, 3] != 0
+    assert target[2, 3] == 0
+    assert target[3, 3] == 0
+
+
+def test_extract_prosody_shard_is_resumable(tmp_path: Path, monkeypatch) -> None:
+    audio = tmp_path / "audio.wav"
+    write_wav(audio)
+    rows = [
+        {
+            "item_id": "source:u1:x",
+            "audio_path": str(audio),
+            "duration_seconds": 0.2,
+            "estimated_frames": 10,
+        }
+    ]
+    monkeypatch.setattr(
+        preprocess_module,
+        "praat_f0",
+        lambda waveform, frames, floor, ceiling: np.full(frames, 100.0),
+    )
+    output = tmp_path / "prosody"
+    arguments = (rows, output, 0, 0, 50.0, 600.0)
+    assert extract_prosody_shard(*arguments) == 1
+    first_mtime = (output / "prosody-r00-s00000.bin").stat().st_mtime_ns
+    assert extract_prosody_shard(*arguments) == 1
+    assert (output / "prosody-r00-s00000.bin").stat().st_mtime_ns == first_mtime
+    index = json.loads((output / "prosody-index-r00-s00000.jsonl").read_text())
+    cache = temporal_cache(index, "prosody_target", "prosody")
+    assert cache is not None and cache.shape == (10, 4)
+
+
 def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
     audio = tmp_path / "source.wav"
     sa = tmp_path / "sa.wav"
@@ -249,6 +293,27 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
             {"item_id": stable_item_id(role, "u1", str(path)), "audio_path": str(path), **fields}
         )
     write_jsonl(student_dir / "index-r00-s00000.jsonl", index_rows)
+    prosody_dir = tmp_path / "prosody"
+    prosody_dir.mkdir()
+    prosody_path = prosody_dir / "prosody-r00-s00000.bin"
+    np.zeros((30, 4), dtype=np.float16).tofile(prosody_path)
+    prosody_rows = []
+    for role, path, offset in (
+        ("source", audio, 0),
+        ("pair-source", audio, 10),
+        ("pair-sa", sa, 20),
+    ):
+        prosody_rows.append(
+            {
+                "item_id": stable_item_id(role, "u1", str(path)),
+                "prosody_target_path": str(prosody_path),
+                "prosody_target_offset_frames": offset,
+                "prosody_target_frames": 10,
+                "prosody_target_dim": 4,
+                "prosody_target_dtype": "float16",
+            }
+        )
+    write_jsonl(prosody_dir / "prosody-index-r00-s00000.jsonl", prosody_rows)
     speaker_dir = tmp_path / "speakers"
     source_store = speaker_dir / "source" / "codec_source" / "spk-level"
     source_store.mkdir(parents=True)
@@ -276,6 +341,7 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
             source_manifest=source_manifest,
             pair_manifest=pair_manifest,
             student_cache_dir=student_dir,
+            prosody_cache_dir=prosody_dir,
             speaker_cache_dir=speaker_dir,
             alignment_dir=alignment_dir,
             output_dir=output,
@@ -290,6 +356,8 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
     assert pair["sa"]["audio_num_frames"] == 3_200
     assert pair["source"]["student_hidden_offset_frames"] == 10
     assert pair["sa"]["student_hidden_offset_frames"] == 20
+    assert pair["source"]["prosody_target_offset_frames"] == 10
+    assert pair["sa"]["prosody_target_offset_frames"] == 20
     assert pair["alignment_lag_frames"] == -2
     assert set(cache_fields(pair["sa"])) == set(base_cache)
     report = audit_manifests(
@@ -301,5 +369,6 @@ def test_finalize_joins_source_and_sa_views(tmp_path: Path) -> None:
     assert report["status"] == "PASS"
     loaded = PairDataset([pair], hop_length=320, segment_frames=5).load(0, crop_seed=3)
     assert loaded["source"]["student_hidden"].shape == (5, 768)
+    assert loaded["source"]["prosody_target"].shape == (5, 4)
     assert loaded["sa"]["speaker_target"].shape == (128,)
     torch.testing.assert_close(loaded["source"]["student_hidden"], loaded["sa"]["student_hidden"])

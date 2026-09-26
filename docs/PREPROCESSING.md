@@ -23,7 +23,7 @@ export PREP=$CODEC/runs/codec-preprocessing-aligned-transcript-v2
 
 cd "$CODEC"
 git pull --ff-only origin main
-python -m pip install -e '.[dev]'
+python -m pip install -e '.[dev,prosody]'
 mkdir -p "$PREP/logs"
 ```
 
@@ -104,7 +104,30 @@ torchrun --standalone --nproc_per_node=4 \
 codec_student_extraction=PASS
 ```
 
-## 3. 全量 pair lag
+## 3. 提取 50 Hz Prosody cache
+
+该阶段是 CPU 任务，可用多个本地进程按 `RANK/WORLD_SIZE` 分片。每条音频生成
+`[normalized log-F0, V/UV, normalized log-energy, delta F0]` 四维 FP16 cache：
+
+```bash
+PYTHONPATH=src \
+torchrun --standalone --nproc_per_node=8 \
+  -m xvc2_codec.preprocess extract-prosody \
+  --inventory "$PREP/plan/inventory.jsonl" \
+  --output-dir "$PREP/prosody" \
+  --shard-max-frames 500000 \
+  --pitch-floor 50 \
+  --pitch-ceiling 600 \
+  2>&1 | tee "$PREP/logs/extract-prosody.log"
+```
+
+输出 shard 带 fingerprint 和 complete marker，中断后可原命令重跑。所有 rank 必须打印：
+
+```text
+codec_prosody_extraction=PASS
+```
+
+## 4. 全量 pair lag
 
 Student cache 完成后，直接从 FP16 shard 为每个 pair 搜索 `-30...+30` 帧的最佳全局 lag，避免
 重复运行 Student：
@@ -131,7 +154,7 @@ python -m xvc2_codec.preprocess summarize-alignment \
 四个 rank 都必须打印 `codec_cached_pair_alignment=PASS`，合并汇总必须打印
 `codec_alignment_summary=PASS`。lag 只改变 pair 两侧 crop 起点，不修改音频或 Student cache。
 
-## 4. GST speaker target
+## 5. GST speaker target
 
 该阶段必须切换到生成 SA 时使用的 `voiceprivacy-sa` 环境：
 
@@ -162,7 +185,7 @@ codec_speaker_extraction=PASS
 
 并且实际 `embedding_dim=128`。
 
-## 5. Finalize 和 audit
+## 6. Finalize 和 audit
 
 ```bash
 conda activate ctc-gop
@@ -173,6 +196,7 @@ python -m xvc2_codec.preprocess finalize \
   --source-manifest "$SOURCE" \
   --pair-manifest "$PAIR" \
   --student-cache-dir "$PREP/student" \
+  --prosody-cache-dir "$PREP/prosody" \
   --speaker-cache-dir "$PREP/speakers" \
   --alignment-dir "$PREP/alignment" \
   --output-dir "$PREP/manifests" \
@@ -201,5 +225,5 @@ codec_manifest_audit=PASS
 ```
 
 抽查通过后，去掉 `--max-items 1000` 做全量 manifest audit，再进入 Codec benchmark 和短训练。
-`dyn_target_path` 与 `prosody_target_path` 当前不生成，因此对应可选 anchor loss 为 0；没有使用伪造
-target 填充它们。
+新 joint training 要求每个 view 同时具有 `phone_target_path` 和 `prosody_target_path`。`dyn_target`
+仍为可选的 legacy cache；当前配置将其权重设为 0，不使用伪造 target 填充。

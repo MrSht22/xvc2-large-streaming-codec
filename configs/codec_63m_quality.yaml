@@ -28,7 +28,7 @@ schedule:
   gan_ramp_end: 30000
   sa_ramp_end: 60000
   disentanglement_ramp_steps: 10000
-  max_steps: 300000
+  max_steps: 330000
 loss:
   reconstruction: 1.0
   adversarial: 0.1
@@ -47,14 +47,14 @@ loss:
   dyn_phone_grl_scale: 0.05
   edit_phone_grl_scale: 0.1
 training:
-  generator_learning_rate: 0.0001
-  discriminator_learning_rate: 0.0002
-  generator_warmup_steps: 1500
-  discriminator_warmup_steps: 1000
+  generator_learning_rate: 0.00002
+  discriminator_learning_rate: 0.0001
+  generator_warmup_steps: 0
+  discriminator_warmup_steps: 0
   weight_decay: 0.0001
   gradient_clip: 5.0
   amp: bf16
   ema_decay: 0.999
   seed: 1
   log_interval: 20
-  save_interval: 10000
+  save_interval: 5000

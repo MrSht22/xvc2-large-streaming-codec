@@ -112,11 +112,14 @@ class ScheduleConfig:
     reconstruction_end: int = 10_000
     gan_ramp_end: int = 30_000
     sa_ramp_end: int = 60_000
+    disentanglement_ramp_steps: int = 10_000
     max_steps: int = 300_000
 
     def __post_init__(self) -> None:
         if not 0 < self.reconstruction_end < self.gan_ramp_end < self.sa_ramp_end <= self.max_steps:
             raise ValueError("Expected reconstruction < GAN < SA <= max_steps")
+        if self.disentanglement_ramp_steps <= 0:
+            raise ValueError("disentanglement_ramp_steps must be positive")
 
 
 @dataclass(frozen=True)
@@ -126,10 +129,17 @@ class LossConfig:
     feature_matching: float = 1.0
     edit_style: float = 0.5
     sa_inv: float = 1.0
-    sa_dyn: float = 0.05
+    sa_dyn: float = 0.01
     phone_anchor: float = 0.25
-    dyn_anchor: float = 0.25
-    prosody_anchor: float = 0.1
+    dyn_anchor: float = 0.0
+    normalized_f0: float = 0.1
+    voicing: float = 0.05
+    relative_energy: float = 0.1
+    f0_delta: float = 0.05
+    dyn_phone_adversary: float = 0.02
+    edit_phone_adversary: float = 0.05
+    dyn_phone_grl_scale: float = 0.05
+    edit_phone_grl_scale: float = 0.1
 
     def __post_init__(self) -> None:
         if any(value < 0 for value in asdict(self).values()):

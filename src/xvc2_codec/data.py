@@ -67,7 +67,10 @@ def _available_frames(
     row: dict[str, Any], tensors: dict[str, Any], hop_length: int, info: AudioMetadata
 ) -> int:
     audio_samples = info.num_frames * 16_000 // info.sample_rate
-    available = min(tensors["student_hidden"].frames, audio_samples // hop_length)
+    temporal_frames = [
+        value.frames for name, value in tensors.items() if name != "speaker_target"
+    ]
+    available = min(*temporal_frames, audio_samples // hop_length)
     if available <= 0:
         raise RuntimeError(f"No aligned frames for {row['audio_path']}")
     return available

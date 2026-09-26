@@ -11,6 +11,7 @@ dependencies = ["numpy>=1.23", "PyYAML>=6.0", "torch>=2.4", "torchaudio>=2.4", "
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.12"]
+prosody = ["praat-parselmouth>=0.4.3"]
 
 [project.scripts]
 xvc2-codec-audit = "xvc2_codec.audit:main"

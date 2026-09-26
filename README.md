@@ -25,8 +25,9 @@ Acoustic total    63,235,169
 Model total       63,981,837
 ```
 
-所有模块均为 fresh initialization；训练入口没有加载旧 Base Codec、GAN 或 Keep Adapter
-checkpoint 的参数迁移路径。
+初始 v1 run 的所有模块均为 fresh initialization。当前训练入口另外支持从兼容旧 checkpoint
+分叉：`--initialize-from` 只迁移模型、discriminator 和兼容 EMA，`--resume` 则严格恢复同一
+run 的 optimizer、scaler、RNG、mode 与 loss-ramp 起点。
 
 ## 安装与 Smoke
 
@@ -94,7 +95,9 @@ Pair manifest 每行：
 ```
 
 `student_hidden.pt` 可以直接存 Tensor，或使用 `{"student_hidden": Tensor}`。其它缓存同理。
-`speaker_target_path` 是必需项；phone/dyn/prosody anchor cache 是可选项。
+`speaker_target_path` 是 joint training 必需项。新版 joint disentanglement 还要求
+`phone_target_path` 和四维 `prosody_target_path`；`dyn_target_path` 保持可选且默认权重为 0。
+Decoder-only quality mode 只要求重建所需的 audio 和 Student hidden。
 
 正式训练前执行真实 cache 审计：
 
@@ -123,7 +126,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 默认同时执行 Generator reconstruction/GAN/FM 和 Discriminator 更新，输出 step time、
 global audio seconds/second 与每 rank 峰值显存。`--no-with-discriminator` 可单独测 warm-up。
 
-## 统一训练
+## Disentanglement retraining
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
@@ -133,6 +136,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
   --pair-manifest /path/sa_pairs_manifest.jsonl \
   --output-dir runs/codec-63m-v1 \
   --speaker-target-dim 128 \
+  --mode joint \
+  --initialize-from /path/old-run/step-060000.pt \
+  --steps 10000 \
   --batch-size 4 \
   --segment-seconds 3.2 \
   --pair-probability 0.15 \
@@ -140,7 +146,12 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
   --prefetch-factor 2
 ```
 
-训练日程自动来自配置：
+本轮从旧 60k checkpoint 分叉，使用 fresh optimizer，并在 60k-70k 对新增 Dynamic prosody
+supervision 和 weak Phone-GRL 做线性 ramp。SA `Z_dyn` trajectory 权重从 `0.05` 降到 `0.01`，
+避免把可转换动态强行压成 source-SA 相等。完整设计、门槛和服务器命令见
+[docs/RETRAINING_PLAN.md](docs/RETRAINING_PLAN.md)。
+
+初始 v1 日程仍由配置表示为：
 
 ```text
 0-10k       reconstruction warm-up
@@ -150,6 +161,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
 ```
 
 Checkpoint 保存 generator、训练期 style head、discriminator、两个 optimizer、EMA 和 RNG。
+新版还保存 `mode` 与 `phase_start_step`。
 每个 step 的 source/pair 选择和 per-rank 样本索引由固定 seed 与 global step 推导，因此 resume
 不会依赖不可见的 DataLoader shuffle position。
 
@@ -183,7 +195,11 @@ aligned-transcript-v2 数据已做逐样本长度对齐；Student probe 和全�
 也不把 speaker probe 的 `speaker_id` 解释成匿名 SA identity。
 
 - 连续 latent；没有 RVQ/VQ。
-- 没有 Converter、GRL、cycle loss、source-speaker repel 或 target acoustic memory。
+- 没有 Converter、cycle loss、source-speaker repel 或 target acoustic memory。
 - 默认只有 complex multi-scale STFT discriminator，没有 MPD。
 - 正式大训练前仍需服务器 2-step DDP smoke、显存/吞吐 benchmark、32-item overfit 和
   full/chunk/reset/flush acceptance。
+
+当前已包含训练期 `Z_dyn`/`Z_edit` Phone-GRL。PESQ/STOI 的独立精修使用
+`configs/codec_63m_quality.yaml` 和 `--mode quality`，只解冻 Decoder 并保留现有
+reconstruction + MS-STFT GAN/FM。

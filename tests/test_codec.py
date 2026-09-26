@@ -9,14 +9,22 @@ import torchaudio
 
 import xvc2_codec.data as data_module
 from xvc2_codec.audit import audit_manifests
-from xvc2_codec.config import LossConfig, ScheduleConfig
+from xvc2_codec.config import ExperimentConfig, LossConfig, ScheduleConfig
 from xvc2_codec.data import PairDataset, TrainingStepDataset, _load_audio_crop, load_view
+from xvc2_codec.discriminator import MultiScaleSTFTDiscriminator
 from xvc2_codec.ema import ExponentialMovingAverage
-from xvc2_codec.losses import ReconstructionLoss
-from xvc2_codec.model import LargeStreamingCodec
+from xvc2_codec.losses import ReconstructionLoss, prosody_losses
+from xvc2_codec.model import LargeStreamingCodec, PhoneAdversary
 from xvc2_codec.schedule import weights_at
 from xvc2_codec.smoke import tiny_config
-from xvc2_codec.train import discriminator_batch, forward_views, warmup_learning_rate
+from xvc2_codec.train import (
+    TrainableCodec,
+    configure_training_mode,
+    discriminator_batch,
+    forward_views,
+    initialize_from_checkpoint,
+    warmup_learning_rate,
+)
 
 
 class StubSourceDataset:
@@ -88,6 +96,80 @@ def test_loss_schedule() -> None:
     assert weights_at(10_000, schedule, loss).sa_inv == 0
     assert weights_at(30_000, schedule, loss).adversarial == loss.adversarial
     assert weights_at(60_000, schedule, loss).sa_inv == loss.sa_inv
+
+
+def test_disentanglement_schedule_starts_at_initialization_step() -> None:
+    schedule = ScheduleConfig(disentanglement_ramp_steps=10_000)
+    loss = LossConfig()
+    assert weights_at(60_000, schedule, loss, phase_start_step=60_000).normalized_f0 == 0
+    assert weights_at(65_000, schedule, loss, phase_start_step=60_000).normalized_f0 == pytest.approx(
+        loss.normalized_f0 * 0.5
+    )
+    assert weights_at(70_000, schedule, loss, phase_start_step=60_000).normalized_f0 == loss.normalized_f0
+
+
+def test_phone_adversary_reverses_only_input_gradient() -> None:
+    adversary = PhoneAdversary(4, 3, grl_scale=0.25)
+    baseline = PhoneAdversary(4, 3, grl_scale=-1.0)
+    baseline.load_state_dict(adversary.state_dict())
+    first = torch.randn(2, 5, 4, requires_grad=True)
+    second = first.detach().clone().requires_grad_(True)
+    adversary(first).sum().backward()
+    baseline(second).sum().backward()
+    torch.testing.assert_close(first.grad, -0.25 * second.grad)
+    for left, right in zip(adversary.parameters(), baseline.parameters()):
+        torch.testing.assert_close(left.grad, right.grad)
+
+
+def test_prosody_losses_ignore_unvoiced_and_padded_targets() -> None:
+    target = torch.tensor(
+        [[[0.0, 1.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 2.0, 0.0], [2.0, 1.0, 3.0, 2.0]]]
+    )
+    predicted = target.clone()
+    predicted[..., 1] = torch.where(target[..., 1] > 0.5, 12.0, -12.0)
+    predicted[0, 2, 0] = 1000.0
+    predicted[0, 2, 3] = 1000.0
+    predicted[0, 3] = 1000.0
+    losses = prosody_losses(predicted, target, torch.tensor([3]))
+    assert losses["normalized_f0"] < 1e-6
+    assert losses["relative_energy"] < 1e-6
+    assert losses["f0_delta"] < 1e-6
+    assert losses["voicing"] < 1e-4
+
+
+def test_old_checkpoint_initialization_allows_only_new_adversaries() -> None:
+    config = ExperimentConfig(model=tiny_config())
+    source = TrainableCodec(LargeStreamingCodec(config.model), 6)
+    discriminator = MultiScaleSTFTDiscriminator(config.discriminator)
+    old_model = {
+        name: value.clone()
+        for name, value in source.state_dict().items()
+        if "phone_adversary" not in name
+    }
+    payload = {
+        "config": config.to_dict(),
+        "model": old_model,
+        "discriminator": discriminator.state_dict(),
+        "ema": {"shadow": old_model},
+    }
+    target = TrainableCodec(LargeStreamingCodec(config.model), 6)
+    target_discriminator = MultiScaleSTFTDiscriminator(config.discriminator)
+    ema = ExponentialMovingAverage(target, 0.999)
+    missing = initialize_from_checkpoint(target, target_discriminator, ema, payload, config)
+    assert missing
+    assert all("phone_adversary" in name for name in missing)
+
+
+def test_quality_mode_only_trains_decoder() -> None:
+    model = TrainableCodec(LargeStreamingCodec(tiny_config()), 6)
+    trainable = configure_training_mode(model, "quality")
+    assert trainable
+    assert all(parameter.requires_grad for parameter in model.codec.decoder.parameters())
+    assert all(
+        not parameter.requires_grad
+        for name, parameter in model.named_parameters()
+        if not name.startswith("codec.decoder.")
+    )
 
 
 def test_learning_rate_warmup() -> None:

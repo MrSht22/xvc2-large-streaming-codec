@@ -26,6 +26,7 @@ SAMPLE_RATE = 16_000
 HIDDEN_DIM = 768
 PHONE_DIM = 40
 SPEAKER_DIM = 128
+PROSODY_DIM = 4
 CACHE_DTYPE = "float16"
 
 
@@ -176,7 +177,9 @@ def command_plan(args: argparse.Namespace) -> None:
         source_rows, args.output_dir / "speaker_references", args.references_per_speaker
     )
     total_frames = sum(row["estimated_frames"] for row in inventory)
-    cache_bytes = total_frames * (HIDDEN_DIM + PHONE_DIM) * np.dtype(np.float16).itemsize
+    cache_bytes = total_frames * (HIDDEN_DIM + PHONE_DIM + PROSODY_DIM) * np.dtype(
+        np.float16
+    ).itemsize
     required_bytes = int(cache_bytes * args.space_safety_factor)
     free_bytes = shutil.disk_usage(args.output_dir).free
     hours_by_role = {
@@ -433,6 +436,168 @@ def command_extract_student(args: argparse.Namespace) -> None:
             args.num_workers,
         )
     print(f"codec_student_extraction=PASS,rank={rank},items={processed},shards={len(shards)}")
+
+
+def prosody_target(
+    waveform: torch.Tensor, frames: int, f0_hz: np.ndarray
+) -> np.ndarray:
+    if frames <= 0:
+        raise ValueError("Prosody target requires at least one frame")
+    values = waveform.detach().cpu().float().flatten().numpy()
+    required_samples = frames * (SAMPLE_RATE // 50)
+    if values.size < required_samples:
+        values = np.pad(values, (0, required_samples - values.size))
+    values = values[:required_samples].reshape(frames, SAMPLE_RATE // 50)
+    log_energy = 0.5 * np.log(np.mean(values.astype(np.float64) ** 2, axis=1) + 1e-8)
+    log_energy = (log_energy - log_energy.mean()) / max(log_energy.std(), 1e-5)
+
+    f0 = np.asarray(f0_hz, dtype=np.float64)
+    if f0.shape != (frames,):
+        raise ValueError(f"Expected {frames} F0 values, got {list(f0.shape)}")
+    voiced = np.isfinite(f0) & (f0 > 0)
+    normalized_f0 = np.zeros(frames, dtype=np.float64)
+    if voiced.any():
+        log_f0 = np.log(f0[voiced])
+        normalized_f0[voiced] = (log_f0 - log_f0.mean()) / max(log_f0.std(), 1e-5)
+    delta_f0 = np.zeros(frames, dtype=np.float64)
+    consecutive = voiced[1:] & voiced[:-1]
+    delta_f0[1:][consecutive] = (
+        normalized_f0[1:][consecutive] - normalized_f0[:-1][consecutive]
+    )
+    return np.stack(
+        (normalized_f0, voiced.astype(np.float64), log_energy, delta_f0), axis=1
+    ).astype(np.float32)
+
+
+def praat_f0(waveform: torch.Tensor, frames: int, floor: float, ceiling: float) -> np.ndarray:
+    try:
+        import parselmouth
+    except ImportError as error:
+        raise RuntimeError(
+            "Prosody extraction requires praat-parselmouth; install the prosody extra"
+        ) from error
+    sound = parselmouth.Sound(
+        waveform.detach().cpu().float().flatten().numpy(), sampling_frequency=SAMPLE_RATE
+    )
+    pitch = sound.to_pitch(
+        time_step=1.0 / 50.0, pitch_floor=floor, pitch_ceiling=ceiling
+    )
+    pitch_times = np.asarray(pitch.xs(), dtype=np.float64)
+    frequencies = np.asarray(pitch.selected_array["frequency"], dtype=np.float64)
+    target_times = (np.arange(frames, dtype=np.float64) + 0.5) / 50.0
+    if not pitch_times.size:
+        return np.zeros(frames, dtype=np.float64)
+    right = np.searchsorted(pitch_times, target_times).clip(0, len(pitch_times) - 1)
+    left = np.maximum(right - 1, 0)
+    use_left = np.abs(pitch_times[left] - target_times) <= np.abs(
+        pitch_times[right] - target_times
+    )
+    indices = np.where(use_left, left, right)
+    result = frequencies[indices]
+    result[np.abs(pitch_times[indices] - target_times) > 0.011] = 0.0
+    return result
+
+
+def prosody_fingerprint(
+    rows: list[dict[str, Any]], pitch_floor: float, pitch_ceiling: float
+) -> str:
+    payload = [
+        "prosody-v1",
+        pitch_floor,
+        pitch_ceiling,
+        [(row["item_id"], row["audio_path"], row["estimated_frames"]) for row in rows],
+    ]
+    return hashlib.sha256(json.dumps(payload, separators=(",", ":")).encode()).hexdigest()
+
+
+def extract_prosody_shard(
+    rows: list[dict[str, Any]],
+    output_dir: Path,
+    rank: int,
+    shard_index: int,
+    pitch_floor: float,
+    pitch_ceiling: float,
+) -> int:
+    stem = f"r{rank:02d}-s{shard_index:05d}"
+    data_path = output_dir / f"prosody-{stem}.bin"
+    index_path = output_dir / f"prosody-index-{stem}.jsonl"
+    complete_path = output_dir / f"prosody-complete-{stem}.json"
+    fingerprint = prosody_fingerprint(rows, pitch_floor, pitch_ceiling)
+    if complete_path.is_file():
+        complete = json.loads(complete_path.read_text(encoding="utf-8"))
+        if complete.get("fingerprint") != fingerprint:
+            raise RuntimeError(f"Completed prosody shard fingerprint differs: {complete_path}")
+        print(f"rank={rank} prosody_shard={shard_index} status=SKIP_COMPLETE", flush=True)
+        return int(complete["items"])
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f".tmp-{os.getpid()}"
+    data_tmp = Path(str(data_path) + suffix)
+    index_tmp = Path(str(index_path) + suffix)
+    rows = sorted(rows, key=lambda row: (int(row["estimated_frames"]), row["item_id"]))
+    offset = 0
+    started = time.monotonic()
+    try:
+        with data_tmp.open("wb") as data_stream, index_tmp.open("w", encoding="utf-8") as index_stream:
+            for index, row in enumerate(rows, start=1):
+                waveform = load_audio(str(row["audio_path"]))[0]
+                frames = int(row["estimated_frames"])
+                f0 = praat_f0(waveform, frames, pitch_floor, pitch_ceiling)
+                target = prosody_target(waveform, frames, f0).astype(np.float16)
+                target.tofile(data_stream)
+                cache = {
+                    **row,
+                    "prosody_target_path": str(data_path.resolve()),
+                    "prosody_target_offset_frames": offset,
+                    "prosody_target_frames": frames,
+                    "prosody_target_dim": PROSODY_DIM,
+                    "prosody_target_dtype": CACHE_DTYPE,
+                }
+                index_stream.write(json.dumps(cache, sort_keys=True) + "\n")
+                offset += frames
+                if index % 100 == 0 or index == len(rows):
+                    elapsed = max(time.monotonic() - started, 1e-6)
+                    print(
+                        f"rank={rank} prosody_shard={shard_index} items={index}/{len(rows)} "
+                        f"items_per_second={index / elapsed:.2f}",
+                        flush=True,
+                    )
+        os.replace(data_tmp, data_path)
+        os.replace(index_tmp, index_path)
+    finally:
+        data_tmp.unlink(missing_ok=True)
+        index_tmp.unlink(missing_ok=True)
+    complete = {"fingerprint": fingerprint, "items": len(rows), "frames": offset}
+    temporary = Path(str(complete_path) + suffix)
+    temporary.write_text(json.dumps(complete, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, complete_path)
+    print(
+        f"rank={rank} prosody_shard={shard_index} status=PASS "
+        f"items={len(rows)} frames={offset}",
+        flush=True,
+    )
+    return len(rows)
+
+
+def command_extract_prosody(args: argparse.Namespace) -> None:
+    rank = int(os.environ.get("RANK", "0"))
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    rows = read_jsonl(args.inventory)
+    shards = partition_shards(rows, rank, world_size, args.shard_max_frames)
+    processed = 0
+    for shard_index, shard in enumerate(shards):
+        processed += extract_prosody_shard(
+            shard,
+            args.output_dir,
+            rank,
+            shard_index,
+            args.pitch_floor,
+            args.pitch_ceiling,
+        )
+    print(
+        f"codec_prosody_extraction=PASS,rank={rank},items={processed},shards={len(shards)}",
+        flush=True,
+    )
 
 
 def load_audio(path: str, maximum_seconds: float | None = None) -> torch.Tensor:
@@ -742,6 +907,17 @@ def load_student_index(
     return result
 
 
+def load_prosody_index(cache_dir: Path) -> dict[str, dict[str, Any]]:
+    result = {}
+    for path in sorted(cache_dir.glob("prosody-index-r*-s*.jsonl")):
+        for row in read_jsonl(path):
+            item_id = str(row["item_id"])
+            if item_id in result:
+                raise ValueError(f"Duplicate prosody cache item: {item_id}")
+            result[item_id] = row
+    return result
+
+
 def alignment_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     lags = [int(row["alignment_lag_frames"]) for row in rows]
     absolute_lags = [abs(value) for value in lags]
@@ -959,6 +1135,17 @@ def cache_fields(row: dict[str, Any]) -> dict[str, Any]:
     return {name: row[name] for name in names}
 
 
+def prosody_cache_fields(row: dict[str, Any]) -> dict[str, Any]:
+    names = (
+        "prosody_target_path",
+        "prosody_target_offset_frames",
+        "prosody_target_frames",
+        "prosody_target_dim",
+        "prosody_target_dtype",
+    )
+    return {name: row[name] for name in names}
+
+
 def audio_fields(metadata: dict[str, Any]) -> dict[str, int]:
     sample_rate = metadata.get("sample_rate")
     num_frames = metadata.get("num_frames")
@@ -980,6 +1167,7 @@ def command_finalize(args: argparse.Namespace) -> None:
     if len(alignment) != len(alignment_rows):
         raise ValueError("Alignment outputs contain duplicate utterance IDs")
     student = load_student_index(args.student_cache_dir)
+    prosody = load_prosody_index(args.prosody_cache_dir)
     source_store = args.speaker_cache_dir / "source" / "codec_source" / "spk-level"
     source_mapping = read_id2idx(source_store / "id2idx")
     source_vectors = torch.load(
@@ -1009,12 +1197,15 @@ def command_finalize(args: argparse.Namespace) -> None:
         item_id = stable_item_id(role, str(row["utterance_id"]), audio_path)
         if item_id not in student:
             raise KeyError(f"Missing Student cache for {item_id}")
+        if item_id not in prosody:
+            raise KeyError(f"Missing prosody cache for {item_id}")
         return {
             "utterance_id": str(row["utterance_id"]),
             "speaker_id": str(row["speaker_id"]),
             "audio_path": str(Path(audio_path).expanduser().resolve()),
             **audio_fields(audio_metadata),
             **cache_fields(student[item_id]),
+            **prosody_cache_fields(prosody[item_id]),
             "speaker_target_path": str(speaker_path.resolve()),
             "speaker_target_index": speaker_index,
         }
@@ -1079,6 +1270,7 @@ def command_finalize(args: argparse.Namespace) -> None:
         "source_rows": len(source_output),
         "pair_rows": len(pair_output),
         "student_cache_items": len(student),
+        "prosody_cache_items": len(prosody),
         "speaker_target_dim": int(source_vectors.shape[1]),
         "source_manifest": str((args.output_dir / "source_train_cache.jsonl").resolve()),
         "pair_manifest": str((args.output_dir / "pair_train_cache.jsonl").resolve()),
@@ -1111,6 +1303,14 @@ def build_parser() -> argparse.ArgumentParser:
     student.add_argument("--shard-max-frames", type=int, default=500_000)
     student.add_argument("--require-cuda", action="store_true")
     student.set_defaults(function=command_extract_student)
+
+    prosody = commands.add_parser("extract-prosody")
+    prosody.add_argument("--inventory", type=Path, required=True)
+    prosody.add_argument("--output-dir", type=Path, required=True)
+    prosody.add_argument("--shard-max-frames", type=int, default=500_000)
+    prosody.add_argument("--pitch-floor", type=float, default=50.0)
+    prosody.add_argument("--pitch-ceiling", type=float, default=600.0)
+    prosody.set_defaults(function=command_extract_prosody)
 
     probe = commands.add_parser("probe-pair-alignment")
     probe.add_argument("--pair-manifest", type=Path, required=True)
@@ -1150,6 +1350,7 @@ def build_parser() -> argparse.ArgumentParser:
     finalize.add_argument("--source-manifest", type=Path, required=True)
     finalize.add_argument("--pair-manifest", type=Path, required=True)
     finalize.add_argument("--student-cache-dir", type=Path, required=True)
+    finalize.add_argument("--prosody-cache-dir", type=Path, required=True)
     finalize.add_argument("--speaker-cache-dir", type=Path, required=True)
     finalize.add_argument("--alignment-dir", type=Path, required=True)
     finalize.add_argument("--output-dir", type=Path, required=True)
@@ -1178,6 +1379,8 @@ def main() -> None:
             raise ValueError(f"{name.replace('_', '-')} must be positive")
     if hasattr(args, "num_workers") and args.num_workers < 0:
         raise ValueError("num-workers cannot be negative")
+    if hasattr(args, "pitch_floor") and not 0 < args.pitch_floor < args.pitch_ceiling:
+        raise ValueError("Expected 0 < pitch-floor < pitch-ceiling")
     args.function(args)
 
 

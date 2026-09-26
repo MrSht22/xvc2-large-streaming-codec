@@ -9,6 +9,36 @@ from .causal import CausalConv1d, ChannelLayerNorm, MultiKernelResidual, Residua
 from .config import CodecConfig
 
 
+class _GradientReverse(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx: Any, values: torch.Tensor, scale: float) -> torch.Tensor:
+        ctx.scale = scale
+        return values
+
+    @staticmethod
+    def backward(ctx: Any, gradient: torch.Tensor) -> tuple[torch.Tensor, None]:
+        return -ctx.scale * gradient, None
+
+
+def gradient_reverse(values: torch.Tensor, scale: float) -> torch.Tensor:
+    return _GradientReverse.apply(values, scale)
+
+
+class PhoneAdversary(torch.nn.Module):
+    def __init__(self, input_dim: int, vocab_size: int, grl_scale: float) -> None:
+        super().__init__()
+        self.grl_scale = grl_scale
+        self.classifier = torch.nn.Sequential(
+            torch.nn.LayerNorm(input_dim),
+            torch.nn.Linear(input_dim, input_dim),
+            torch.nn.GELU(),
+            torch.nn.Linear(input_dim, vocab_size),
+        )
+
+    def forward(self, values: torch.Tensor) -> torch.Tensor:
+        return self.classifier(gradient_reverse(values, self.grl_scale))
+
+
 class KeepHead(torch.nn.Module):
     """Frame-local split of frozen Student states into content and expressive dynamics."""
 
