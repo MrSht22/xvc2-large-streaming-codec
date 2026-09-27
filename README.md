@@ -180,6 +180,9 @@ aligned-transcript-v2 数据已做逐样本长度对齐；Student probe 和全�
 `global_audio_seconds_per_second`、`mean_data_wait_seconds_per_rank_step` 和
 `maximum_allocated_gib` 选择吞吐最高且显存有余量的配置。
 短测可增加 `--steps 50`，它只限制本次调用的步数，不改变配置中的正式 `max_steps`。
+H100 可增加 `--compile-model` 做可选的 generator 编译测试；首次编译时间不计入稳定吞吐。
+日志同时输出 `mean_step_seconds`，具体 batch 8/16/24 A/B 流程见
+[docs/RETRAINING_PLAN.md](docs/RETRAINING_PLAN.md#h100-throughput-tuning)。
 
 ## 全量 Preprocessing
 

@@ -1,6 +1,6 @@
 # Codec Disentanglement and Quality Retraining Plan
 
-日期：2026-09-26。
+日期：2026-09-27。
 
 ## 目标与边界
 
@@ -171,6 +171,45 @@ torchrun --standalone --nproc_per_node=4 \
   --prefetch-factor 4 \
   2>&1 | tee "$JOINT_RUN/logs/train-060k-070k.log"
 ```
+
+如果旧版本在 60k 启动后的第二步报出 DDP `Expected to have finished reduction`，原因是
+`dyn_anchor=0` 时 legacy Dynamic anchor head 没有梯度。更新到包含该修复的版本后，直接重跑上述
+`--initialize-from "$OLD_60K"` 命令即可；失败发生在首个 checkpoint 保存之前，不需要 resume。
+
+## H100 throughput tuning
+
+训练入口已经启用 BF16、TF32、fused AdamW、pinned/persistent DataLoader、non-blocking H2D 和
+DDP static graph。日志额外输出 `mean_step_seconds`。不要用显存占用判断速度，比较稳定区间的：
+
+```text
+global_audio_seconds_per_second 越大越好
+mean_step_seconds 越小越好
+mean_data_wait_seconds_per_rank_step 接近 0 表示继续增加 worker 收益有限
+```
+
+先确认 batch 8 能稳定跑 100 step，再从同一个 60k checkpoint 分别测试 batch 12、16、24。
+每组至少跑 300-500 step；pair step 会同时处理 source/SA 两个 view，因此它决定峰值显存。不要把
+不同 batch 的 step 数直接解释成相同训练量，正式训练仍需按处理过的音频秒数比较。
+
+`torch.compile` 是可选项。它会在前几个 shape 首次出现时产生编译开销，因此只比较 100 step
+之后的日志。在候选命令末尾增加：
+
+```bash
+  --compile-model
+```
+
+建议测试顺序：
+
+```text
+batch 8,  no compile  -> 正确性基线
+batch 16, no compile  -> 测试更大 micro-batch 的吞吐
+batch 16, compile     -> 只在稳定吞吐确实提高时保留
+batch 24, no compile  -> 仅在 pair step 峰值显存仍有至少 10-15 GiB 余量时测试
+```
+
+当前 `--num-workers 4 --prefetch-factor 4` 已是合理起点。只有当
+`mean_data_wait_seconds_per_rank_step` 持续高于约 `0.05 s` 且 CPU/存储仍有余量时，再测试
+worker 6 或 8；若 data wait 已接近 0，继续增加 worker 不会改善 GPU compute throughput。
 
 70k gate 通过后，先续到 80k；再次通过后续到配置上限 300k：
 

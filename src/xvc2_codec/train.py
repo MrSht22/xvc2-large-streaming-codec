@@ -220,8 +220,12 @@ def set_requires_grad(module: torch.nn.Module, enabled: bool) -> None:
         parameter.requires_grad_(enabled)
 
 
-def configure_training_mode(model: TrainableCodec, mode: str) -> list[torch.nn.Parameter]:
+def configure_training_mode(
+    model: TrainableCodec, mode: str, *, train_dyn_anchor: bool = False
+) -> list[torch.nn.Parameter]:
     set_requires_grad(model, mode == "joint")
+    if mode == "joint" and not train_dyn_anchor:
+        set_requires_grad(model.codec.keep_head.dyn_anchor, False)
     if mode == "quality":
         set_requires_grad(model.codec.decoder, True)
     parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
@@ -294,12 +298,16 @@ def initialize_from_checkpoint(
 
 
 def require_disentanglement_caches(
-    source_rows: list[dict[str, Any]], pair_rows: list[dict[str, Any]]
+    source_rows: list[dict[str, Any]],
+    pair_rows: list[dict[str, Any]],
+    *,
+    require_dyn_target: bool = False,
 ) -> None:
     def check(label: str, row: dict[str, Any]) -> None:
-        missing = [
-            name for name in ("phone_target_path", "prosody_target_path") if not row.get(name)
-        ]
+        required = ["phone_target_path", "prosody_target_path"]
+        if require_dyn_target:
+            required.append("dyn_target_path")
+        missing = [name for name in required if not row.get(name)]
         if missing:
             raise ValueError(f"Joint disentanglement training requires {missing}: {label}")
 
@@ -321,6 +329,11 @@ def main() -> None:
     checkpoints.add_argument("--resume", type=Path)
     checkpoints.add_argument("--initialize-from", type=Path)
     parser.add_argument("--mode", choices=("joint", "quality"), default="joint")
+    parser.add_argument(
+        "--compile-model",
+        action="store_true",
+        help="Compile the generator training wrapper with dynamic batch shapes",
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument("--batch-size", type=int, default=1, help="Per-rank item or pair batch")
     parser.add_argument("--segment-seconds", type=float, default=3.2)
@@ -352,7 +365,11 @@ def main() -> None:
     source_rows = read_jsonl(args.source_manifest)
     pair_rows = read_jsonl(args.pair_manifest)
     if args.mode == "joint":
-        require_disentanglement_caches(source_rows, pair_rows)
+        require_disentanglement_caches(
+            source_rows,
+            pair_rows,
+            require_dyn_target=config.loss.dyn_anchor > 0,
+        )
     source_dataset = SourceDataset(source_rows, config.model.hop_length, segment_frames)
     pair_dataset = PairDataset(pair_rows, config.model.hop_length, segment_frames)
     codec = LargeStreamingCodec(config.model)
@@ -375,7 +392,11 @@ def main() -> None:
         )
         step = int(initialization_payload["step"])
         phase_start_step = step
-    trainable_parameters = configure_training_mode(model, args.mode)
+    trainable_parameters = configure_training_mode(
+        model,
+        args.mode,
+        train_dyn_anchor=config.loss.dyn_anchor > 0,
+    )
     generator_optimizer = torch.optim.AdamW(
         trainable_parameters,
         lr=config.training.generator_learning_rate,
@@ -415,6 +436,7 @@ def main() -> None:
             broadcast_buffers=False,
             find_unused_parameters=False,
             gradient_as_bucket_view=True,
+            static_graph=True,
         )
         training_discriminator = DistributedDataParallel(
             discriminator,
@@ -422,6 +444,10 @@ def main() -> None:
             broadcast_buffers=False,
             gradient_as_bucket_view=True,
         )
+    if args.compile_model:
+        if device.type != "cuda":
+            raise ValueError("--compile-model requires CUDA")
+        training_model = torch.compile(training_model, dynamic=True)
     reconstruction_loss = ReconstructionLoss()
     end_step = min(
         config.schedule.max_steps,
@@ -469,6 +495,10 @@ def main() -> None:
                     "mode": args.mode,
                     "start_step": step,
                     "phase_start_step": phase_start_step,
+                    "compile_model": args.compile_model,
+                    "trainable_parameters": sum(
+                        parameter.numel() for parameter in trainable_parameters
+                    ),
                     "initialized_missing_keys": initialized_missing,
                 }
             )
@@ -654,6 +684,7 @@ def main() -> None:
                             "global_audio_seconds_per_second": float(
                                 performance[0] / elapsed_tensor
                             ),
+                            "mean_step_seconds": float(elapsed_tensor / interval_steps),
                             "mean_data_wait_seconds_per_rank_step": float(
                                 performance[1] / (world_size * interval_steps)
                             ),

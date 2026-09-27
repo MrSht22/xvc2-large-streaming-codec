@@ -23,6 +23,7 @@ from xvc2_codec.train import (
     discriminator_batch,
     forward_views,
     initialize_from_checkpoint,
+    require_disentanglement_caches,
     warmup_learning_rate,
 )
 
@@ -170,6 +171,52 @@ def test_quality_mode_only_trains_decoder() -> None:
         for name, parameter in model.named_parameters()
         if not name.startswith("codec.decoder.")
     )
+
+
+def test_joint_mode_freezes_disabled_legacy_dyn_anchor() -> None:
+    model = TrainableCodec(LargeStreamingCodec(tiny_config()), 6)
+    configure_training_mode(model, "joint", train_dyn_anchor=False)
+    assert all(
+        not parameter.requires_grad for parameter in model.codec.keep_head.dyn_anchor.parameters()
+    )
+    assert all(parameter.requires_grad for parameter in model.codec.keep_head.prosody_head.parameters())
+
+
+def test_joint_forward_gives_every_trainable_parameter_a_gradient() -> None:
+    config = tiny_config()
+    model = TrainableCodec(LargeStreamingCodec(config), 6, 0.05, 0.1)
+    configure_training_mode(model, "joint", train_dyn_anchor=False)
+    frames = 8
+    output = model(
+        torch.randn(2, 1, frames * config.hop_length),
+        torch.randn(2, frames, config.student_dim),
+    )
+    objective = sum(
+        output[name].float().mean()
+        for name in (
+            "reconstruction",
+            "phone_logits",
+            "prosody",
+            "style_embedding",
+            "dyn_phone_logits",
+            "edit_phone_logits",
+        )
+    )
+    objective.backward()
+    missing = [
+        name
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad and parameter.grad is None
+    ]
+    assert missing == []
+
+
+def test_dyn_anchor_requires_cache_when_enabled() -> None:
+    base = {"phone_target_path": "phone.bin", "prosody_target_path": "prosody.bin"}
+    pair = {"source": dict(base), "sa": dict(base)}
+    require_disentanglement_caches([dict(base)], [pair], require_dyn_target=False)
+    with pytest.raises(ValueError, match="dyn_target_path"):
+        require_disentanglement_caches([dict(base)], [pair], require_dyn_target=True)
 
 
 def test_learning_rate_warmup() -> None:
