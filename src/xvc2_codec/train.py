@@ -16,7 +16,14 @@ from torch.utils.data import DataLoader
 
 from .checkpoint import load_checkpoint, save_checkpoint
 from .config import load_config
-from .data import PairDataset, SourceDataset, TrainingStepDataset, read_jsonl
+from .data import (
+    PairDataset,
+    SourceDataset,
+    TrainingStepDataset,
+    filter_excluded_audio_rows,
+    read_audio_path_exclusions,
+    read_jsonl,
+)
 from .discriminator import (
     MultiScaleSTFTDiscriminator,
     discriminator_loss,
@@ -323,6 +330,13 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--source-manifest", type=Path, required=True)
     parser.add_argument("--pair-manifest", type=Path, required=True)
+    parser.add_argument(
+        "--exclude-audio-paths",
+        type=Path,
+        action="append",
+        default=[],
+        help="Text file with one exact audio_path per line; may be repeated",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--speaker-target-dim", type=int, required=True)
     checkpoints = parser.add_mutually_exclusive_group()
@@ -364,6 +378,20 @@ def main() -> None:
     segment_frames = round(args.segment_seconds * 16_000 / config.model.hop_length)
     source_rows = read_jsonl(args.source_manifest)
     pair_rows = read_jsonl(args.pair_manifest)
+    excluded_audio_paths = read_audio_path_exclusions(args.exclude_audio_paths)
+    source_rows, pair_rows, excluded_source_rows, excluded_pair_rows = (
+        filter_excluded_audio_rows(source_rows, pair_rows, excluded_audio_paths)
+    )
+    if rank == 0 and excluded_audio_paths:
+        print(
+            json.dumps(
+                {
+                    "excluded_audio_paths": sorted(excluded_audio_paths),
+                    "excluded_source_rows": excluded_source_rows,
+                    "excluded_pair_rows": excluded_pair_rows,
+                }
+            )
+        )
     if args.mode == "joint":
         require_disentanglement_caches(
             source_rows,

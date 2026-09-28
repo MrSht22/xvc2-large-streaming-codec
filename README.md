@@ -134,6 +134,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
   --config configs/codec_63m.yaml \
   --source-manifest /path/codec_source_train_manifest.jsonl \
   --pair-manifest /path/sa_pairs_manifest.jsonl \
+  --exclude-audio-paths configs/known_bad_audio_paths.txt \
   --output-dir runs/codec-63m-v1 \
   --speaker-target-dim 128 \
   --mode joint \
@@ -164,6 +165,12 @@ Checkpoint 保存 generator、训练期 style head、discriminator、两个 opti
 新版还保存 `mode` 与 `phase_start_step`。
 每个 step 的 source/pair 选择和 per-rank 样本索引由固定 seed 与 global step 推导，因此 resume
 不会依赖不可见的 DataLoader shuffle position。
+
+训练读取音频时会先对默认 torchaudio backend 重试三次，再使用 FFmpeg backend 读取同一 crop。
+对于已确认损坏或不支持随机 seek 的文件，使用 `--exclude-audio-paths` 传入一行一个
+`audio_path` 的文本文件。过滤同时作用于 source rows 和 pair 的 source/SA 两个 view，因此重新
+生成 manifest 不会重新引入 `configs/known_bad_audio_paths.txt` 中的已知坏文件。启动日志会输出
+实际过滤的 source/pair 行数；同一 run 中断后必须用 `--resume`，不能用 `--initialize-from`。
 
 每个 rank 使用独立的预取 DataLoader；global step 决定 source/pair 选择、样本索引和
 original/SA 共享 crop，因此增加 worker 或断点恢复不会改变训练样本。Pair batch 会将 original

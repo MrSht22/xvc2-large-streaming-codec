@@ -1,0 +1,2 @@
+# libsndfile cannot seek reliably in this LibriLight FLAC during random crop loading.
+/inspire/hdd/global_public/public_datas/speech/LibriLight/vad/medium/1401/2715/warsofthejews_20_josephus_64kb_0001.flac

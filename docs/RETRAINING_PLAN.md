@@ -218,6 +218,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 PYTHONPATH=src \
 torchrun --standalone --nproc_per_node=4 -m xvc2_codec.train \
   --config configs/codec_63m.yaml \
   --source-manifest "$SOURCE_CACHE" --pair-manifest "$PAIR_CACHE" \
+  --exclude-audio-paths configs/known_bad_audio_paths.txt \
   --output-dir "$JOINT_RUN" --speaker-target-dim 128 --mode joint \
   --resume "$JOINT_RUN/step-070000.pt" --steps 10000 \
   --batch-size 8 --segment-seconds 3.2 --pair-probability 0.15 \
@@ -228,6 +229,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 PYTHONPATH=src \
 torchrun --standalone --nproc_per_node=4 -m xvc2_codec.train \
   --config configs/codec_63m.yaml \
   --source-manifest "$SOURCE_CACHE" --pair-manifest "$PAIR_CACHE" \
+  --exclude-audio-paths configs/known_bad_audio_paths.txt \
   --output-dir "$JOINT_RUN" --speaker-target-dim 128 --mode joint \
   --resume "$JOINT_RUN/step-080000.pt" \
   --batch-size 8 --segment-seconds 3.2 --pair-probability 0.15 \

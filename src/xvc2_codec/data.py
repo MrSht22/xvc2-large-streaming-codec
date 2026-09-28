@@ -25,23 +25,71 @@ def _load_audio_with_retries(
     path: str, *, frame_offset: int = 0, num_frames: int = -1
 ) -> tuple[torch.Tensor, int]:
     attempts = 3
+    primary_error: Exception | None = None
     for attempt in range(1, attempts + 1):
         try:
             return torchaudio.load(path, frame_offset=frame_offset, num_frames=num_frames)
         except (OSError, RuntimeError) as error:
+            primary_error = error
             if attempt == attempts:
-                raise RuntimeError(
-                    f"Audio decode failed after {attempts} attempts: path={path!r}, "
-                    f"frame_offset={frame_offset}, num_frames={num_frames}, "
-                    f"error_type={type(error).__name__}, error_args={error.args!r}"
-                ) from error
+                break
             time.sleep(0.1 * 2 ** (attempt - 1))
+    try:
+        return torchaudio.load(
+            path,
+            frame_offset=frame_offset,
+            num_frames=num_frames,
+            backend="ffmpeg",
+        )
+    except (OSError, RuntimeError, ValueError) as fallback_error:
+        raise RuntimeError(
+            f"Audio decode failed after {attempts} default-backend attempts and FFmpeg "
+            f"fallback: path={path!r}, frame_offset={frame_offset}, "
+            f"num_frames={num_frames}, "
+            f"primary_error_type={type(primary_error).__name__}, "
+            f"primary_error_args={primary_error.args!r}, "
+            f"fallback_error_type={type(fallback_error).__name__}, "
+            f"fallback_error_args={fallback_error.args!r}"
+        ) from fallback_error
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [
         json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
+
+
+def read_audio_path_exclusions(paths: list[Path]) -> set[str]:
+    excluded: set[str] = set()
+    for path in paths:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            value = line.strip()
+            if value and not value.startswith("#"):
+                excluded.add(value)
+    return excluded
+
+
+def filter_excluded_audio_rows(
+    source_rows: list[dict[str, Any]],
+    pair_rows: list[dict[str, Any]],
+    excluded_audio_paths: set[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, int]:
+    if not excluded_audio_paths:
+        return source_rows, pair_rows, 0, 0
+    filtered_source = [
+        row for row in source_rows if row["audio_path"] not in excluded_audio_paths
+    ]
+    filtered_pair = [
+        row
+        for row in pair_rows
+        if all(row[view]["audio_path"] not in excluded_audio_paths for view in ("source", "sa"))
+    ]
+    return (
+        filtered_source,
+        filtered_pair,
+        len(source_rows) - len(filtered_source),
+        len(pair_rows) - len(filtered_pair),
+    )
 
 
 def _load_view_tensors(row: dict[str, Any]) -> dict[str, Any]:

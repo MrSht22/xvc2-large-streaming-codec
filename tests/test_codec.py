@@ -10,7 +10,13 @@ import torchaudio
 import xvc2_codec.data as data_module
 from xvc2_codec.audit import audit_manifests
 from xvc2_codec.config import ExperimentConfig, LossConfig, ScheduleConfig
-from xvc2_codec.data import PairDataset, TrainingStepDataset, _load_audio_crop, load_view
+from xvc2_codec.data import (
+    PairDataset,
+    TrainingStepDataset,
+    _load_audio_crop,
+    filter_excluded_audio_rows,
+    load_view,
+)
 from xvc2_codec.discriminator import MultiScaleSTFTDiscriminator
 from xvc2_codec.ema import ExponentialMovingAverage
 from xvc2_codec.losses import ReconstructionLoss, prosody_losses
@@ -356,6 +362,30 @@ def test_audio_crop_retries_transient_decode_failure(monkeypatch) -> None:
     assert loaded.shape == (1, 1_600)
 
 
+def test_audio_crop_uses_ffmpeg_after_default_backend_fails(monkeypatch) -> None:
+    backends = []
+
+    def backend_load(*_args, **kwargs):
+        backend = kwargs.get("backend")
+        backends.append(backend)
+        if backend != "ffmpeg":
+            raise RuntimeError("soundfile seek failed")
+        return torch.zeros(1, 1_600), 16_000
+
+    monkeypatch.setattr(torchaudio, "load", backend_load)
+    monkeypatch.setattr(data_module.time, "sleep", lambda _seconds: None)
+    row = {
+        "audio_path": "/shared/audio.flac",
+        "audio_sample_rate": 16_000,
+        "audio_num_frames": 3_200,
+    }
+
+    loaded = _load_audio_crop(row, 320, 1_600)
+
+    assert backends == [None, None, None, "ffmpeg"]
+    assert loaded.shape == (1, 1_600)
+
+
 def test_audio_crop_reports_path_after_retries(monkeypatch) -> None:
     def broken_load(*_args, **_kwargs):
         raise RuntimeError("persistent decode error")
@@ -368,8 +398,30 @@ def test_audio_crop_reports_path_after_retries(monkeypatch) -> None:
         "audio_num_frames": 3_200,
     }
 
-    with pytest.raises(RuntimeError, match=re.escape("/shared/broken.wav")):
+    with pytest.raises(RuntimeError, match=re.escape("/shared/broken.wav")) as failure:
         _load_audio_crop(row, 320, 1_600)
+    assert "default-backend attempts and FFmpeg fallback" in str(failure.value)
+
+
+def test_filter_excluded_audio_rows_removes_source_and_nested_pair_views() -> None:
+    bad = "/shared/bad.flac"
+    source_rows = [{"audio_path": bad}, {"audio_path": "/shared/good.flac"}]
+    pair_rows = [
+        {"source": {"audio_path": "/shared/a.wav"}, "sa": {"audio_path": bad}},
+        {
+            "source": {"audio_path": "/shared/b.wav"},
+            "sa": {"audio_path": "/shared/c.wav"},
+        },
+    ]
+
+    filtered_source, filtered_pair, source_count, pair_count = filter_excluded_audio_rows(
+        source_rows, pair_rows, {bad}
+    )
+
+    assert filtered_source == [{"audio_path": "/shared/good.flac"}]
+    assert filtered_pair == [pair_rows[1]]
+    assert source_count == 1
+    assert pair_count == 1
 
 
 def test_load_view_uses_manifest_audio_metadata(tmp_path: Path, monkeypatch) -> None:
