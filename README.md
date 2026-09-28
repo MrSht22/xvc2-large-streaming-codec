@@ -135,6 +135,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --standalone --nproc_per_node=4 \
   --source-manifest /path/codec_source_train_manifest.jsonl \
   --pair-manifest /path/sa_pairs_manifest.jsonl \
   --exclude-audio-paths configs/known_bad_audio_paths.txt \
+  --exclude-missing-audio \
   --output-dir runs/codec-63m-v1 \
   --speaker-target-dim 128 \
   --mode joint \
@@ -171,6 +172,10 @@ Checkpoint 保存 generator、训练期 style head、discriminator、两个 opti
 `audio_path` 的文本文件。过滤同时作用于 source rows 和 pair 的 source/SA 两个 view，因此重新
 生成 manifest 不会重新引入 `configs/known_bad_audio_paths.txt` 中的已知坏文件。启动日志会输出
 实际过滤的 source/pair 行数；同一 run 中断后必须用 `--resume`，不能用 `--initialize-from`。
+`--exclude-missing-audio` 是可选的启动前完整性检查：仅 rank 0 对 source 和 pair 两侧的唯一
+`audio_path` 用 16 个线程做一次存在性扫描并显示进度，再把缺失路径广播给其它 rank。它不会
+忽略 cache、schema 或其它训练异常。大 manifest 在网络存储上通常需要数分钟扫描，正式长训练
+建议启用。
 
 每个 rank 使用独立的预取 DataLoader；global step 决定 source/pair 选择、样本索引和
 original/SA 共享 crop，因此增加 worker 或断点恢复不会改变训练样本。Pair batch 会将 original

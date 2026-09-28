@@ -219,6 +219,7 @@ torchrun --standalone --nproc_per_node=4 -m xvc2_codec.train \
   --config configs/codec_63m.yaml \
   --source-manifest "$SOURCE_CACHE" --pair-manifest "$PAIR_CACHE" \
   --exclude-audio-paths configs/known_bad_audio_paths.txt \
+  --exclude-missing-audio \
   --output-dir "$JOINT_RUN" --speaker-target-dim 128 --mode joint \
   --resume "$JOINT_RUN/step-070000.pt" --steps 10000 \
   --batch-size 8 --segment-seconds 3.2 --pair-probability 0.15 \
@@ -230,6 +231,7 @@ torchrun --standalone --nproc_per_node=4 -m xvc2_codec.train \
   --config configs/codec_63m.yaml \
   --source-manifest "$SOURCE_CACHE" --pair-manifest "$PAIR_CACHE" \
   --exclude-audio-paths configs/known_bad_audio_paths.txt \
+  --exclude-missing-audio \
   --output-dir "$JOINT_RUN" --speaker-target-dim 128 --mode joint \
   --resume "$JOINT_RUN/step-080000.pt" \
   --batch-size 8 --segment-seconds 3.2 --pair-probability 0.15 \

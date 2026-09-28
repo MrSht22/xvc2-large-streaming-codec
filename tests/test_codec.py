@@ -15,6 +15,7 @@ from xvc2_codec.data import (
     TrainingStepDataset,
     _load_audio_crop,
     filter_excluded_audio_rows,
+    find_missing_audio_paths,
     load_view,
 )
 from xvc2_codec.discriminator import MultiScaleSTFTDiscriminator
@@ -422,6 +423,27 @@ def test_filter_excluded_audio_rows_removes_source_and_nested_pair_views() -> No
     assert filtered_pair == [pair_rows[1]]
     assert source_count == 1
     assert pair_count == 1
+
+
+def test_find_missing_audio_paths_checks_source_and_pair_views(tmp_path: Path) -> None:
+    present = tmp_path / "present.wav"
+    present.touch()
+    missing_source = tmp_path / "missing-source.wav"
+    missing_pair = tmp_path / "missing-pair.wav"
+    source_rows = [
+        {"audio_path": str(present)},
+        {"audio_path": str(missing_source)},
+    ]
+    pair_rows = [
+        {
+            "source": {"audio_path": str(present)},
+            "sa": {"audio_path": str(missing_pair)},
+        }
+    ]
+
+    missing = find_missing_audio_paths(source_rows, pair_rows)
+
+    assert missing == {str(missing_source), str(missing_pair)}
 
 
 def test_load_view_uses_manifest_audio_metadata(tmp_path: Path, monkeypatch) -> None:

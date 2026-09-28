@@ -21,6 +21,8 @@ from .data import (
     SourceDataset,
     TrainingStepDataset,
     filter_excluded_audio_rows,
+    find_missing_audio_paths,
+    manifest_audio_paths,
     read_audio_path_exclusions,
     read_jsonl,
 )
@@ -337,6 +339,11 @@ def main() -> None:
         default=[],
         help="Text file with one exact audio_path per line; may be repeated",
     )
+    parser.add_argument(
+        "--exclude-missing-audio",
+        action="store_true",
+        help="Have rank 0 scan manifest audio paths and exclude files that do not exist",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--speaker-target-dim", type=int, required=True)
     checkpoints = parser.add_mutually_exclusive_group()
@@ -379,18 +386,42 @@ def main() -> None:
     source_rows = read_jsonl(args.source_manifest)
     pair_rows = read_jsonl(args.pair_manifest)
     excluded_audio_paths = read_audio_path_exclusions(args.exclude_audio_paths)
+    missing_audio_paths: set[str] = set()
+    if args.exclude_missing_audio:
+        if rank == 0:
+            unique_audio_paths = manifest_audio_paths(source_rows, pair_rows)
+            print(
+                json.dumps(
+                    {
+                        "audio_path_scan": "START",
+                        "unique_audio_paths": len(unique_audio_paths),
+                    }
+                ),
+                flush=True,
+            )
+            missing_audio_paths = find_missing_audio_paths(
+                source_rows, pair_rows, show_progress=True
+            )
+        if world_size > 1:
+            broadcast = [sorted(missing_audio_paths) if rank == 0 else None]
+            dist.broadcast_object_list(broadcast, src=0)
+            missing_audio_paths = set(broadcast[0])
+        excluded_audio_paths.update(missing_audio_paths)
     source_rows, pair_rows, excluded_source_rows, excluded_pair_rows = (
         filter_excluded_audio_rows(source_rows, pair_rows, excluded_audio_paths)
     )
-    if rank == 0 and excluded_audio_paths:
+    if rank == 0 and (excluded_audio_paths or args.exclude_missing_audio):
         print(
             json.dumps(
                 {
+                    "audio_path_scan": "PASS" if args.exclude_missing_audio else "NOT_REQUESTED",
+                    "missing_audio_paths": sorted(missing_audio_paths),
                     "excluded_audio_paths": sorted(excluded_audio_paths),
                     "excluded_source_rows": excluded_source_rows,
                     "excluded_pair_rows": excluded_pair_rows,
                 }
-            )
+            ),
+            flush=True,
         )
     if args.mode == "joint":
         require_disentanglement_caches(

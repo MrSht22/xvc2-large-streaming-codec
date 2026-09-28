@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ import torch
 import torchaudio
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from .cache import temporal_cache, vector_cache
 
@@ -67,6 +69,45 @@ def read_audio_path_exclusions(paths: list[Path]) -> set[str]:
             if value and not value.startswith("#"):
                 excluded.add(value)
     return excluded
+
+
+def manifest_audio_paths(
+    source_rows: list[dict[str, Any]], pair_rows: list[dict[str, Any]]
+) -> set[str]:
+    paths = {str(row["audio_path"]) for row in source_rows}
+    paths.update(
+        str(row[view]["audio_path"])
+        for row in pair_rows
+        for view in ("source", "sa")
+    )
+    return paths
+
+
+def find_missing_audio_paths(
+    source_rows: list[dict[str, Any]],
+    pair_rows: list[dict[str, Any]],
+    *,
+    show_progress: bool = False,
+) -> set[str]:
+    paths = sorted(manifest_audio_paths(source_rows, pair_rows))
+    missing: set[str] = set()
+    chunk_size = 4_096
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        progress = tqdm(
+            total=len(paths),
+            desc="Scan manifest audio",
+            unit="path",
+            disable=not show_progress,
+        )
+        try:
+            for begin in range(0, len(paths), chunk_size):
+                chunk = paths[begin : begin + chunk_size]
+                exists = executor.map(lambda path: Path(path).is_file(), chunk)
+                missing.update(path for path, present in zip(chunk, exists) if not present)
+                progress.update(len(chunk))
+        finally:
+            progress.close()
+    return missing
 
 
 def filter_excluded_audio_rows(
