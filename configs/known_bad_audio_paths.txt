@@ -1,2 +1,4 @@
 # libsndfile cannot seek reliably in this LibriLight FLAC during random crop loading.
 /inspire/hdd/global_public/public_datas/speech/LibriLight/vad/medium/1401/2715/warsofthejews_20_josephus_64kb_0001.flac
+# libsndfile cannot seek reliably in this LibriSpeech FLAC during random crop loading.
+/inspire/hdd/global_public/public_datas/speech/LibriSpeech/train-clean-360/2334/150915/2334-150915-0093.flac
