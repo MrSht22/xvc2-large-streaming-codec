@@ -3,6 +3,9 @@
 从随机参数训练的大容量连续 latent Codec。它接收冻结 Large Student 的 768-d 50 Hz hidden，
 并把语音表示拆为 `Z_inv`、`Z_dyn` 和 `Z_edit`。
 
+Seed-VC 同句 `BAA / ABA / AAB` 单分支 swap、3×3 指标和对比音频报告见
+[SINGLE_SWAP_PROBE.md](docs/SINGLE_SWAP_PROBE.md)。
+
 ## 模型合同
 
 ```text

@@ -22,6 +22,7 @@ xvc2-codec-smoke = "xvc2_codec.smoke:main"
 xvc2-codec-preprocess = "xvc2_codec.preprocess:main"
 xvc2-codec-latent-probe = "xvc2_codec.latent_probe:main"
 xvc2-codec-build-eval-cache = "xvc2_codec.build_eval_cache:main"
+xvc2-codec-swap-probe = "xvc2_codec.swap_probe:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
