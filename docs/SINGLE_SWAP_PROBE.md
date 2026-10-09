@@ -61,7 +61,10 @@ B 原音的 WER/SIM 是 Seed-VC 质量对照，不被当作完美目标。
 
 ## 时间对齐
 
-音频统一为 mono 16 kHz，只移除不足一帧的尾部（<20 ms），不截短整句。
+音频统一为 mono 16 kHz，按 waveform 与 Student hidden 的共同完整帧数裁尾，
+与训练数据加载器一致。Student 的 valid 卷积感受野为 400 samples、stride 为 320，
+因此 hidden 可能比 `floor(samples/320)` 少一帧；该正常边界差异允许，裁尾 <40 ms。
+更明显的短 cache 仍报错，日志打印 audio/hidden/保留帧数及裁尾样本数。
 swap 使用 A 帧数，默认将 B 的三路 latent 用同一线性时间映射对齐 A，
 不拉伸参考 waveform。保存每对 `donor_frame_map.npy`。
 

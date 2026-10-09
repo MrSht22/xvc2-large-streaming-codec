@@ -99,12 +99,29 @@ def load_view(view: dict, codec: LargeStreamingCodec, student, device: torch.dev
         hidden = output["hidden_states"][0, : int(output["output_lengths"][0])].cpu()
     else:
         raise ValueError("Each a/b view needs Student hidden or --student-checkpoint")
-    frames = waveform.shape[-1] // codec.config.hop_length
-    # Only discard a final partial hop, never silently truncate words to a short cache.
-    if hidden.ndim != 2 or hidden.shape[1] != codec.config.student_dim or hidden.shape[0] < frames:
-        raise ValueError(f"Invalid/short Student hidden for {view['audio_path']}")
+    audio_frames = waveform.shape[-1] // codec.config.hop_length
+    # The Student valid-convolution frontend has RF=400, stride=320, so it may
+    # produce one fewer frame than floor(samples / hop). Match training's common
+    # frame crop, but do not silently accept genuinely short/mismatched caches.
+    if (
+        hidden.ndim != 2
+        or hidden.shape[1] != codec.config.student_dim
+        or hidden.shape[0] < audio_frames - 1
+    ):
+        raise ValueError(
+            f"Invalid/short Student hidden for {view['audio_path']}: "
+            f"audio_samples={waveform.shape[-1]}, audio_frames={audio_frames}, "
+            f"hidden_shape={tuple(hidden.shape)}, expected_dim={codec.config.student_dim}"
+        )
+    frames = min(audio_frames, hidden.shape[0])
     if frames < 2 or not torch.isfinite(hidden).all() or not torch.isfinite(waveform).all():
         raise ValueError(f"Invalid/short input: {view['audio_path']}")
+    print(
+        f"codec_swap_input={view['audio_path']} audio_frames={audio_frames} "
+        f"hidden_frames={hidden.shape[0]} kept_frames={frames} "
+        f"tail_trim_samples={waveform.shape[-1] - frames * codec.config.hop_length}",
+        flush=True,
+    )
     return waveform[:, : frames * codec.config.hop_length], hidden[:frames].float()
 
 

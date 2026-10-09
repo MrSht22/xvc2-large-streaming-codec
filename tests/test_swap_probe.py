@@ -17,6 +17,7 @@ from xvc2_codec.swap_probe import (
     frame_mapping,
     generate,
     load_codec,
+    load_view,
     map_latent,
     normalize_pairs,
 )
@@ -124,6 +125,52 @@ def test_prosody_masks_unvoiced_and_does_not_score_empty_pitch():
     assert prosody_distances(first, second)["f0"] == 2
     with pytest.raises(ValueError, match="matching"):
         prosody_distances(first, second[:4])
+
+
+@pytest.mark.parametrize("tail", [0, 79, 80, 319])
+def test_load_view_accepts_student_valid_convolution_boundary(tmp_path, tail):
+    codec = LargeStreamingCodec(
+        replace(
+            tiny_config(),
+            encoder_rates=(2, 4, 5, 8),
+            decoder_rates=(8, 5, 4, 2),
+            decoder_channels=(32, 24, 16, 8),
+        )
+    )
+    samples = 5 * 320 + tail
+    audio = tmp_path / "input.wav"
+    torchaudio.save(str(audio), torch.randn(1, samples) * 0.1, 16000)
+
+    class Student:
+        def __call__(self, waveform, lengths):
+            # Match the actual seven-layer Student output_lengths formula.
+            frames = lengths.clone()
+            for kernel, stride in zip((10, 3, 3, 3, 3, 2, 2), (5, 2, 2, 2, 2, 2, 2)):
+                frames = (frames - kernel) // stride + 1
+            return {"hidden_states": torch.zeros(1, int(frames[0]), 16), "output_lengths": frames}
+
+    expected = (samples - 400) // 320 + 1
+    wave, hidden = load_view({"audio_path": str(audio)}, codec, Student(), torch.device("cpu"))
+    assert hidden.shape == (expected, 16)
+    assert wave.shape == (1, expected * 320)
+    cache = tmp_path / "hidden.pt"
+    torch.save(hidden, cache)
+    cached_wave, cached_hidden = load_view(
+        {"audio_path": str(audio), "student_hidden_path": str(cache)},
+        codec,
+        None,
+        torch.device("cpu"),
+    )
+    torch.testing.assert_close(cached_hidden, hidden)
+    torch.testing.assert_close(cached_wave, wave)
+    torch.save(torch.zeros(3, 16), cache)
+    with pytest.raises(ValueError, match="audio_frames=5, hidden_shape=\\(3, 16\\)"):
+        load_view(
+            {"audio_path": str(audio), "student_hidden_path": str(cache)},
+            codec,
+            None,
+            torch.device("cpu"),
+        )
 
 
 def test_matrix_uses_AAA_differences_and_masks_insufficient_contrast():
