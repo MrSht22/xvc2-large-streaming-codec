@@ -6,6 +6,12 @@ A 是原音，B 是 Seed-VC 对 A 做的同句 VC。读取已生成的 Seed-VC �
 
 ## 配对清单
 
+已整理的 64 对清单为 [seed_vc_libritts64_pairs.jsonl](../configs/seed_vc_libritts64_pairs.jsonl)。
+它包含服务器绝对路径、源句 `text`、源/目标身份参考、性别、时长和原始 metadata，
+可直接传 `--manifest configs/seed_vc_libritts64_pairs.jsonl`。`text` 使用 `source_text`；
+`target_text` 仅描述目标参考音频，不能用于转换输出的 WER。这里 `same/cross` 已核对为
+同性别/跨性别标签；`target_duration_sec` 是参考音频时长，不是 VC 输出时长。
+
 直接支持 Seed-VC 的原始导出，无需改写成嵌套格式：
 
 ```json
