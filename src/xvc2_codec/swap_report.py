@@ -245,7 +245,10 @@ def write_report(records: list[dict], output: Path, examples_per_cell: int) -> N
                     f"RMS/AAA {example['rms_ratio_to_AAA']:.3f}；"
                     f"|幅度|≥1 比例 {row['clip_fraction']:.4f}<br>"
                     f"身份参考: {html.escape(row['identity_reference_kind'])}；"
-                    f"映射: {html.escape(row['alignment'])}</p>"
+                    f"映射: {html.escape(row['alignment'])}<br>"
+                    f"源/目标 speaker：{html.escape(str(row.get('source_speaker', '未提供')))} / "
+                    f"{html.escape(str(row.get('target_speaker', '未提供')))}；"
+                    f"conversion：{html.escape(str(row.get('conversion', '未提供')))}</p>"
                 )
                 parts.append(
                     "<p>向 B 的距离改善："

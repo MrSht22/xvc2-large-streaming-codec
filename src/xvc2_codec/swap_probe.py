@@ -22,6 +22,53 @@ from .preprocess import load_student, write_jsonl
 SWAPS = {"BAA": "z_inv", "ABA": "z_dyn", "AAB": "z_edit"}
 
 
+def normalize_pairs(rows: list[dict]) -> list[dict]:
+    """Accept the Seed-VC export directly, retaining the original experiment labels."""
+    normalized = []
+    for original in rows:
+        row = dict(original)
+        if "source_audio_path" in row and "converted_audio_path" in row:
+            row.setdefault("pair_id", f"seedvc_{int(row['index']):03d}")
+            row.setdefault("donor_method", "seed-vc")
+            row.setdefault("a", {"audio_path": row["source_audio_path"]})
+            row.setdefault("b", {"audio_path": row["converted_audio_path"]})
+            row.setdefault("b_identity_reference_path", row["target_reference_audio_path"])
+            candidates = [
+                candidate["source_audio_path"]
+                for candidate in rows
+                if candidate.get("source_speaker") == row.get("source_speaker")
+                and candidate.get("source_audio_path")
+                and candidate["source_audio_path"] != row["source_audio_path"]
+            ]
+            if candidates:
+                # Prefer a different chapter, then select deterministically within that pool.
+                candidates.sort(
+                    key=lambda path: (
+                        Path(path).parent == Path(row["source_audio_path"]).parent,
+                        path,
+                    )
+                )
+                row.setdefault("a_identity_reference_path", candidates[0])
+        text = str(row.get("text") or row.get("transcript") or "").strip()
+        if not text:
+            source = Path(row["a"]["audio_path"])
+            paths = [source.with_suffix(".normalized.txt"), source.with_suffix(".original.txt")]
+            for path in paths:
+                if path.is_file():
+                    text = path.read_text(encoding="utf-8-sig").strip()
+                    if text:
+                        row["text_path"] = str(path)
+                        break
+            if not text:
+                raise FileNotFoundError(
+                    f"No LibriTTS transcript for {source}; expected {paths}. "
+                    "Keep dataset sidecar text files or provide text/transcript in JSONL."
+                )
+        row["text"] = text
+        normalized.append(row)
+    return normalized
+
+
 def load_codec(config_path: Path, checkpoint: Path, weights: str, device: torch.device):
     config = load_config(config_path)
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
@@ -113,7 +160,7 @@ def decode_swaps(codec, a_wave, a_hidden, b_wave, b_hidden, mapping):
 
 
 def generate(args: argparse.Namespace) -> None:
-    rows = read_jsonl(args.manifest)
+    rows = normalize_pairs(read_jsonl(args.manifest))
     if args.max_pairs is not None:
         rows = rows[: args.max_pairs]
     if not rows or len({row["pair_id"] for row in rows}) != len(rows):
@@ -144,6 +191,7 @@ def generate(args: argparse.Namespace) -> None:
         "swaps": SWAPS,
     }
     (args.output_dir / "request.json").write_text(json.dumps(request, indent=2) + "\n")
+    write_jsonl(rows, args.output_dir / "pairs.jsonl")
     records = []
     for index, row in enumerate(rows, 1):
         pair_id = str(row["pair_id"])
@@ -187,6 +235,20 @@ def generate(args: argparse.Namespace) -> None:
         for branch, waveform in outputs.items():
             records.append(
                 {
+                    **{
+                        key: row[key]
+                        for key in (
+                            "index",
+                            "source_speaker",
+                            "target_speaker",
+                            "conversion",
+                            "text_path",
+                            "source_audio_path",
+                            "converted_audio_path",
+                            "target_reference_audio_path",
+                        )
+                        if key in row
+                    },
                     "pair_id": pair_id,
                     "branch": branch,
                     "text": row.get("aligned_text") or row["text"],

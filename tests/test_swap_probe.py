@@ -2,6 +2,7 @@ import argparse
 import json
 import types
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -11,7 +12,14 @@ import torchaudio
 from xvc2_codec.config import ExperimentConfig
 from xvc2_codec.model import LargeStreamingCodec
 from xvc2_codec.smoke import tiny_config
-from xvc2_codec.swap_probe import decode_swaps, frame_mapping, generate, load_codec, map_latent
+from xvc2_codec.swap_probe import (
+    decode_swaps,
+    frame_mapping,
+    generate,
+    load_codec,
+    map_latent,
+    normalize_pairs,
+)
 from xvc2_codec.swap_report import (
     REQUIRED,
     evaluate,
@@ -63,6 +71,45 @@ def test_mapping_interpolates_all_latent_layouts_and_rejects_invalid_maps(tmp_pa
         np.save(path, np.array(values))
         with pytest.raises(ValueError, match="Frame map"):
             frame_mapping(3, 3, str(path))
+
+
+def test_seed_export_reads_libritts_text_and_selects_other_source_reference(tmp_path):
+    sources = [
+        tmp_path / chapter / f"source{i}.wav"
+        for i, chapter in enumerate(("chapter1", "chapter1", "chapter2"))
+    ]
+    for source in sources:
+        source.parent.mkdir(exist_ok=True)
+        source.with_suffix(".normalized.txt").write_text("The normalized transcript.")
+    rows = [
+        {
+            "index": i + 1,
+            "source_speaker": "8455",
+            "target_speaker": "4077",
+            "conversion": "same" if i % 2 == 0 else "cross",
+            "source_audio_path": str(source),
+            "converted_audio_path": str(tmp_path / f"vc{i}.wav"),
+            "target_reference_audio_path": str(tmp_path / "target.wav"),
+        }
+        for i, source in enumerate(sources)
+    ]
+    normalized = normalize_pairs(rows)
+    assert normalized[0]["pair_id"] == "seedvc_001"
+    assert normalized[0]["a"]["audio_path"] == rows[0]["source_audio_path"]
+    assert normalized[0]["b"]["audio_path"] == rows[0]["converted_audio_path"]
+    assert normalized[0]["b_identity_reference_path"] == rows[0]["target_reference_audio_path"]
+    assert normalized[0]["a_identity_reference_path"] == str(sources[2])
+    assert normalized[0]["text"] == "The normalized transcript."
+    assert normalized[0]["conversion"] == "same"
+    assert "a" not in rows[0]  # Do not mutate the user's original manifest rows.
+    sources[0].with_suffix(".normalized.txt").write_text("")
+    sources[0].with_suffix(".original.txt").write_text("Original transcript.")
+    assert normalize_pairs(rows)[0]["text"] == "Original transcript."
+    sources[0].with_suffix(".original.txt").unlink()
+    with pytest.raises(FileNotFoundError, match="No LibriTTS transcript"):
+        normalize_pairs(rows)
+    rows[0]["transcript"] = "An explicit transcript."
+    assert normalize_pairs(rows)[0]["text"] == "An explicit transcript."
 
 
 def test_prosody_masks_unvoiced_and_does_not_score_empty_pitch():
@@ -213,6 +260,47 @@ def test_real_codec_generate_and_waveform_report(tmp_path, monkeypatch):
     assert "same-text fallback" in html
     with pytest.raises(FileExistsError):
         generate(args)
+
+
+def test_flat_seed_export_generates_with_on_the_fly_student(tmp_path, monkeypatch):
+    args = make_fixture(tmp_path)
+    cached = json.loads(args.manifest.read_text())
+    source = cached["a"]["audio_path"]
+    Path(source).with_suffix(".normalized.txt").write_text("hello world")
+    row = {
+        "index": 1,
+        "source_speaker": "8455",
+        "target_speaker": "4077",
+        "conversion": "same",
+        "source_audio_path": source,
+        "converted_audio_path": cached["b"]["audio_path"],
+        "target_reference_audio_path": cached["b"]["audio_path"],
+    }
+    args.manifest.write_text(json.dumps(row) + "\n")
+    args.student_checkpoint = tmp_path / "student.pt"
+
+    class Student:
+        def __call__(self, waveform, lengths):
+            frames = waveform.shape[-1] // 320
+            return {
+                "hidden_states": torch.zeros(1, frames, 16),
+                "output_lengths": torch.tensor([frames]),
+            }
+
+    monkeypatch.setattr("xvc2_codec.swap_probe.load_student", lambda *args: Student())
+    generate(args)
+    normalized = json.loads((args.output_dir / "pairs.jsonl").read_text())
+    assert normalized["text"] == "hello world"
+    records = [
+        json.loads(line) for line in (args.output_dir / "branches.jsonl").read_text().splitlines()
+    ]
+    assert len(records) == 8
+    assert all(
+        record["pair_id"] == "seedvc_001"
+        and record["source_speaker"] == "8455"
+        and record["conversion"] == "same"
+        for record in records
+    )
 
 
 def test_checkpoint_selects_requested_weights(tmp_path):

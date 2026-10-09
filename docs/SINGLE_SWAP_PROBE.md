@@ -6,6 +6,28 @@ A 是原音，B 是 Seed-VC 对 A 做的同句 VC。读取已生成的 Seed-VC �
 
 ## 配对清单
 
+直接支持 Seed-VC 的原始导出，无需改写成嵌套格式：
+
+```json
+{"index":1,"source_speaker":"8455","target_speaker":"4077","conversion":"same","source_audio_path":"/data/8455_210777_000022_000004.wav","target_reference_audio_path":"/data/4077_13754_000001_000000.wav","converted_audio_path":"/data/001_src8455_tgt4077.wav"}
+```
+
+A = `source_audio_path`，B = `converted_audio_path`；目标身份参考使用
+`target_reference_audio_path`，源身份参考从全清单同 `source_speaker` 的另一条原音选取，
+优先不同 chapter，随后按路径排序。因此 `--max-pairs 3` 仍可使用全清单的其他原音参考。
+`conversion` 的 same/cross 原样保留为分组标签，不解释为同身份/跨身份。
+
+文字使用行内 `text` 或 `transcript`；未提供则自动读原音旁同名 `.normalized.txt`，
+不存在或为空时回退 `.original.txt`。两者都不可用时明确报错，不用 ASR 伪造 ground truth。
+例如 `8455_210777_000022_000004.wav` 对应 `8455_210777_000022_000004.normalized.txt`。
+生成目录另存 `pairs.jsonl`，包含自动补齐的 transcript、参考和稳定的 `seedvc_001` ID；
+speaker、conversion、原始路径等保留到 `branches.jsonl` 和评测输出。
+
+服务器上可直接把该 64 行清单保存为 `seed_vc_pairs.jsonl`，传给下文 `--manifest`。
+音频和同名文字文件必须在执行机器可读。本地代码验证不访问 `/inspire` 音频。
+
+也继续支持原来的嵌套格式：
+
 使用 JSONL，每行一对。路径写绝对路径，`pair_id` 只用字母、数字、`_-.`。
 
 ```json
