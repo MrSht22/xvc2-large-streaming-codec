@@ -9,6 +9,7 @@ import torchaudio
 
 import xvc2_codec.data as data_module
 from xvc2_codec.audit import audit_manifests
+from xvc2_codec.checkpoint import restore_cuda_rng_state
 from xvc2_codec.config import ExperimentConfig, LossConfig, ScheduleConfig
 from xvc2_codec.data import (
     PairDataset,
@@ -31,6 +32,7 @@ from xvc2_codec.train import (
     forward_views,
     initialize_from_checkpoint,
     require_disentanglement_caches,
+    training_end_step,
     warmup_learning_rate,
 )
 
@@ -83,6 +85,29 @@ def test_ema_load_preserves_model_device_and_dtype() -> None:
     for name, value in model.state_dict().items():
         assert ema.shadow[name].device == value.device
         assert ema.shadow[name].dtype == value.dtype
+
+
+def test_cuda_rng_restore_uses_only_current_visible_device(monkeypatch) -> None:
+    restored: list[tuple[torch.Tensor, int]] = []
+    states = [torch.tensor([index], dtype=torch.uint8) for index in range(4)]
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 1)
+    monkeypatch.setattr(
+        torch.cuda,
+        "set_rng_state",
+        lambda state, device: restored.append((state, device)),
+    )
+
+    restore_cuda_rng_state(states)
+
+    assert len(restored) == 1
+    torch.testing.assert_close(restored[0][0], states[1])
+    assert restored[0][1] == 1
+
+
+def test_training_steps_can_extend_past_configured_default() -> None:
+    assert training_end_step(250_000, 300_000, None) == 300_000
+    assert training_end_step(300_000, 300_000, 300_000) == 600_000
 
 
 def test_codec_forward_backward() -> None:

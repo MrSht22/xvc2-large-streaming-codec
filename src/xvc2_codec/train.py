@@ -121,6 +121,10 @@ def set_learning_rate(optimizer: torch.optim.Optimizer, learning_rate: float) ->
         group["lr"] = learning_rate
 
 
+def training_end_step(step: int, configured_max_steps: int, invocation_steps: int | None) -> int:
+    return step + invocation_steps if invocation_steps is not None else configured_max_steps
+
+
 def discriminator_batch(outputs, batches, views):
     return (
         torch.cat([batches[view]["waveform"] for view in views], dim=0),
@@ -359,7 +363,11 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1, help="Per-rank item or pair batch")
     parser.add_argument("--segment-seconds", type=float, default=3.2)
     parser.add_argument("--pair-probability", type=float, default=0.15)
-    parser.add_argument("--steps", type=int, help="Stop after this many steps in this invocation")
+    parser.add_argument(
+        "--steps",
+        type=int,
+        help="Run this many additional steps; may extend beyond configured max_steps",
+    )
     parser.add_argument("--num-workers", type=int, default=2, help="Loader workers per rank")
     parser.add_argument("--prefetch-factor", type=int, default=2)
     parser.add_argument(
@@ -508,10 +516,7 @@ def main() -> None:
             raise ValueError("--compile-model requires CUDA")
         training_model = torch.compile(training_model, dynamic=True)
     reconstruction_loss = ReconstructionLoss()
-    end_step = min(
-        config.schedule.max_steps,
-        step + args.steps if args.steps is not None else config.schedule.max_steps,
-    )
+    end_step = training_end_step(step, config.schedule.max_steps, args.steps)
     if end_step <= step:
         raise ValueError(
             f"Checkpoint step {step} has reached configured max_steps "

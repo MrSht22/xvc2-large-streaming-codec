@@ -8,6 +8,14 @@ from typing import Any
 import torch
 
 
+def restore_cuda_rng_state(states: list[torch.Tensor]) -> None:
+    if not states or not torch.cuda.is_available():
+        return
+    device = torch.cuda.current_device()
+    if device < len(states):
+        torch.cuda.set_rng_state(states[device], device=device)
+
+
 def save_checkpoint(path: Path, **payload: Any) -> None:
     payload = dict(payload)
     payload["format_version"] = 1
@@ -27,5 +35,5 @@ def load_checkpoint(path: Path, *, restore_rng: bool = True) -> dict[str, Any]:
     random.setstate(payload["rng"]["python"])
     torch.set_rng_state(payload["rng"]["torch"])
     if "cuda" in payload["rng"] and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(payload["rng"]["cuda"])
+        restore_cuda_rng_state(payload["rng"]["cuda"])
     return payload
