@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import time
 from pathlib import Path
 
 import torch
@@ -27,13 +28,40 @@ from .vc_data import VCPairDataConfig, VCPairDataset
 class SeededVCPairDataset(VCPairDataset):
     """Replay roles/crops at an epoch+item cursor without consuming model RNG."""
 
-    epoch = 0
     seed = 0
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Persistent worker copies must observe the parent's sampler epoch.
+        self._epoch = torch.zeros((), dtype=torch.int64).share_memory_()
+
+    @property
+    def epoch(self):
+        return int(self._epoch)
+
+    @epoch.setter
+    def epoch(self, value):
+        self._epoch.fill_(value)
 
     def __getitem__(self, index):
         with torch.random.fork_rng(devices=[]):
             torch.random.default_generator.manual_seed(self.seed + self.epoch * len(self) + index)
             return super().__getitem__(index)
+
+
+def build_training_loader(dataset, sampler, batch_size, num_workers, prefetch_factor, device):
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        sampler=sampler,
+        num_workers=num_workers,
+        prefetch_factor=prefetch_factor if num_workers else None,
+        persistent_workers=num_workers > 0,
+        collate_fn=dataset.collate,
+        worker_init_fn=initialize_data_worker,
+        pin_memory=device.type == "cuda",
+        generator=torch.Generator().manual_seed(dataset.seed),
+    )
 
 
 class VCTrainingModel(torch.nn.Module):
@@ -235,13 +263,21 @@ def main():
     checkpoints.add_argument("--initialize-vc", type=Path)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--num-workers", type=int, default=0, help="Audio loader workers per rank")
+    parser.add_argument(
+        "--prefetch-factor",
+        type=int,
+        default=2,
+        help="Prefetched batches per worker; used only when num-workers > 0",
+    )
     parser.add_argument("--steps", type=int, help="Additional optimizer steps this invocation")
     parser.add_argument("--val-pairs", type=int, default=16)
     parser.add_argument("--audio-examples", type=int, default=4)
     args = parser.parse_args()
     if min(args.batch_size, args.val_pairs) <= 0 or min(args.num_workers, args.audio_examples) < 0:
         parser.error("Invalid batch/worker/validation sizes")
+    if args.prefetch_factor <= 0:
+        parser.error("--prefetch-factor must be positive")
     if args.steps is not None and args.steps <= 0:
         parser.error("--steps must be positive")
     if args.stage == "decoder" and not (args.initialize_vc or args.resume):
@@ -318,15 +354,8 @@ def main():
     sampler = DistributedSampler(
         dataset, num_replicas=world_size, rank=rank, seed=training["seed"], drop_last=False
     )
-    loader = DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        sampler=sampler,
-        num_workers=args.num_workers,
-        collate_fn=dataset.collate,
-        worker_init_fn=initialize_data_worker,
-        pin_memory=device.type == "cuda",
-        generator=torch.Generator().manual_seed(training["seed"]),
+    loader = build_training_loader(
+        dataset, sampler, args.batch_size, args.num_workers, args.prefetch_factor, device
     )
     val_loader = DataLoader(validation, batch_size=1, collate_fn=validation.collate, num_workers=0)
     wrapped = (
@@ -344,6 +373,11 @@ def main():
                 {
                     "stage": args.stage,
                     "base": base,
+                    "loader": {
+                        "num_workers_per_rank": args.num_workers,
+                        "prefetch_factor": loader.prefetch_factor,
+                        "persistent_workers": loader.persistent_workers,
+                    },
                     "trainable": {
                         group["name"]: sum(p.numel() for p in group["params"])
                         for group in optimizer.param_groups
@@ -352,11 +386,15 @@ def main():
             ),
             flush=True,
         )
+    interval_seconds, interval_data_wait, interval_samples, interval_steps = 0.0, 0.0, 0, 0
     while step < end:
         sampler.set_epoch(epoch)
         dataset.epoch = epoch
+        previous_end = time.perf_counter()
         for batch_index, batch in enumerate(loader):
+            data_wait = time.perf_counter() - previous_end
             if batch_index < offset:
+                previous_end = time.perf_counter()
                 continue
             batch = move(batch, device)
             optimizer.zero_grad(set_to_none=True)
@@ -372,12 +410,29 @@ def main():
             scaler.update()
             step += 1
             offset = batch_index + 1
-            if step == 1 or step % training["log_interval"] == 0:
+            logging_step = step == 1 or step % training["log_interval"] == 0
+            if logging_step and device.type == "cuda":
+                torch.cuda.synchronize(device)
+            interval_seconds += time.perf_counter() - previous_end
+            interval_data_wait += data_wait
+            interval_samples += batch["source"]["waveform"].shape[0]
+            interval_steps += 1
+            if logging_step:
                 values = torch.stack([objective.detach(), *[v.detach() for v in metrics.values()]])
+                performance = torch.tensor(
+                    [interval_seconds, interval_data_wait, interval_samples],
+                    dtype=torch.float64,
+                    device=device,
+                )
+                reports = [torch.empty_like(performance) for _ in range(world_size)]
                 if world_size > 1:
                     dist.all_reduce(values)
                     values /= world_size
+                    dist.all_gather(reports, performance)
+                else:
+                    reports[0] = performance
                 if rank == 0:
+                    timings = torch.stack(reports).cpu()
                     print(
                         json.dumps(
                             {
@@ -390,10 +445,25 @@ def main():
                                     g["name"]: g["lr"] for g in optimizer.param_groups
                                 },
                                 "reference_kinds": batch["reference_kind"],
+                                "mean_step_seconds_by_rank": (
+                                    timings[:, 0] / interval_steps
+                                ).tolist(),
+                                "mean_data_wait_seconds_by_rank": (
+                                    timings[:, 1] / interval_steps
+                                ).tolist(),
+                                "global_pairs_per_second": float(
+                                    timings[:, 2].sum() / timings[:, 0].max()
+                                ),
                             }
                         ),
                         flush=True,
                     )
+                interval_seconds, interval_data_wait, interval_samples, interval_steps = (
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                )
             if step % training["val_interval"] == 0 or step == end:
                 if rank == 0:
                     scores = validate(
@@ -424,6 +494,8 @@ def main():
                 )
             if step >= end:
                 break
+            # Exclude validation, checkpoint writes and log collectives from training timing.
+            previous_end = time.perf_counter()
         if step < end:
             epoch += 1
             offset = 0

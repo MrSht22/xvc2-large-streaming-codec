@@ -7,6 +7,7 @@ import torch
 import torchaudio
 import yaml
 from test_vc_streaming import codec_config, latents, make_pipeline
+from torch.utils.data import DistributedSampler
 
 from xvc2_codec.losses import ReconstructionLoss
 from xvc2_codec.vc import StreamingLatentConverter
@@ -14,7 +15,9 @@ from xvc2_codec.vc_condition import ReferenceFrontend
 from xvc2_codec.vc_data import VCPairDataConfig, VCPairDataset
 from xvc2_codec.vc_infer import convert_stream
 from xvc2_codec.vc_train import (
+    SeededVCPairDataset,
     build_optimizer,
+    build_training_loader,
     compute_losses,
     restore_vc,
     valid_reconstruction_loss,
@@ -274,7 +277,20 @@ def test_training_cli_checkpoint_resume_and_decoder_transition(tmp_path, monkeyp
     checkpoint = output / "step-000002.pt"
     assert checkpoint.is_file()
     assert (output / "validation-000002/000-converted.wav").is_file()
-    run(["--output-dir", str(output), "--resume", str(checkpoint), "--steps", "2"])
+    run(
+        [
+            "--output-dir",
+            str(output),
+            "--resume",
+            str(checkpoint),
+            "--steps",
+            "2",
+            "--num-workers",
+            "1",
+            "--prefetch-factor",
+            "3",
+        ]
+    )
     resumed = torch.load(output / "step-000004.pt", weights_only=False)
     uninterrupted = tmp_path / "uninterrupted"
     run(["--output-dir", str(uninterrupted), "--steps", "4"])
@@ -301,3 +317,31 @@ def test_training_cli_checkpoint_resume_and_decoder_transition(tmp_path, monkeyp
         (adapted / "validation-000001/metrics.json").read_text()
     )
     assert all(not key.startswith("student") for key in payload["vc"])
+
+
+def test_persistent_workers_observe_epoch_and_match_zero_worker_sampling(tmp_path):
+    train, _ = make_training_data(tmp_path)
+    config = VCPairDataConfig(segment_duration=0.12, volume_normalize=False, highpass_cutoff_freq=0)
+
+    def sample(workers):
+        dataset = SeededVCPairDataset(train, config)
+        dataset.seed = 1
+        sampler = DistributedSampler(dataset, num_replicas=1, rank=0, seed=1)
+        loader = build_training_loader(dataset, sampler, 1, workers, 3, torch.device("cpu"))
+        assert loader.persistent_workers == bool(workers)
+        assert loader.prefetch_factor == (3 if workers else None)
+        epochs = []
+        for epoch in (0, 1, 2):
+            dataset.epoch = epoch
+            sampler.set_epoch(epoch)
+            epochs.append(
+                [
+                    (batch["index"], batch["start_frame"], batch["role_assignment_mode"])
+                    for batch in loader
+                ]
+            )
+        return epochs
+
+    expected = sample(0)
+    assert sample(1) == expected
+    assert expected[0] != expected[1]

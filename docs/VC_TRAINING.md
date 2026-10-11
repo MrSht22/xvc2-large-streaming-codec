@@ -106,7 +106,23 @@ python -m xvc2_codec.vc_train \
 
 同阶段续训时用 `--resume runs/.../step-XXXXXX.pt` 替换 `--initialize-vc`，其余参数保持一致。
 多 GPU 把 `python -m` 换成 `torchrun --standalone --nproc_per_node=4 -m`；batch size 为每卡值。
-`cloudstorfs` 建议先维持 `--num-workers 0`。代码接入 DDP，但本地验证不包含真实多卡 CUDA 性能。
+`--num-workers` 是每卡的音频读取/预处理进程数；`--prefetch-factor` 是每个 worker 预取的 batch 数。
+默认保留 `--num-workers 0`，此时不启用预取；有 worker 时自动启用 `persistent_workers`，
+并通过共享 epoch 保持跨 epoch 的采样正确。两卡、每卡 batch 16 可先使用：
+
+```bash
+--batch-size 16 --num-workers 4 --prefetch-factor 4
+```
+
+这会启动总计 8 个 worker，每卡最多预取 16 个 batch。CUDA 训练仍使用 pinned memory 与
+non-blocking host→device 拷贝。worker/prefetch 属于运行参数，可在 `--resume` 时调整，
+无需改变 YAML、阶段、学习率、batch size 或 world size；旧 checkpoint 也可以继续加载。
+已有 checkpoint 续训使用 `--resume`，不要用 `--initialize-vc` 代替同阶段恢复。
+
+日志新增 `mean_data_wait_seconds_by_rank`、`mean_step_seconds_by_rank` 和 `global_pairs_per_second`，
+分别观察两卡平均取 batch 等待、训练迭代耗时及整体 pair 吞吐，用相同 batch/数据比较调整效果。
+验证目前只在 rank 0 执行，其他 rank 在 barrier 等待；验证期间单卡空闲不会由增加训练 worker 消除。
+代码接入 DDP，但本地验证不包含真实多卡 CUDA 性能。
 
 每次验证输出 source、target、当前 Codec 对 target 的自重建、converted、reference 五个 WAV，
 附带参考类型/path JSON 和诊断指标；第二阶段另外报告普通自然自重建 loss。
@@ -139,5 +155,6 @@ PYTHONPATH=src:../large_streaming_student/src \
 
 测试覆盖冻结范围和实际参数更新、普通自重建对 Decoder 的独立梯度、teacher 稳定、参考角色切换、
 padding 不进入 speaker pooling、静态参考 attention 的因果性与分块等价、checkpoint 两阶段衔接，
-以及小参数真实 Student/Codec 的训练入口与断点恢复。
+以及小参数真实 Student/Codec 的训练入口与断点恢复；还检查常驻 worker 的跨 epoch 采样，
+以及从 0 worker checkpoint 切换到带预取的 worker 后恢复的一致性。
 这些小模型测试不证明真实 ERes2Net/checkpoint 的 VC 质量，也不替代服务器数据/时间对齐检查。
