@@ -6,6 +6,10 @@
 Seed-VC 同句 `BAA / ABA / AAB` 单分支 swap、3×3 指标和对比音频报告见
 [SINGLE_SWAP_PROBE.md](docs/SINGLE_SWAP_PROBE.md)。
 
+X-VC 原始配对 JSONL 的角色采样与条件遮挡见 [VC_PAIR_DATA.md](docs/VC_PAIR_DATA.md)；
+因果 dyn/edit Converter、配对前向和 raw-audio chunk 接口见 [VC_STREAMING.md](docs/VC_STREAMING.md)。
+两阶段 VC 训练、参考音色条件、checkpoint 和流式文件推理见 [VC_TRAINING.md](docs/VC_TRAINING.md)。
+
 ## 模型合同
 
 ```text
@@ -14,7 +18,7 @@ waveform -> Causal Acoustic Encoder -> Z_edit 96
 [Z_inv, Z_dyn, Z_edit] -> Fusion 640 -> Causal Decoder -> waveform
 ```
 
-Decoder 是 unconditional 的，不接收 target speaker embedding。未来 speaker condition 只允许
+Decoder 是 unconditional 的，不接收 target speaker embedding。speaker condition 只允许
 进入独立 Latent Converter。
 
 默认参数量：

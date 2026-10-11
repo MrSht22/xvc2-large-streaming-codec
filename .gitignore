@@ -6,6 +6,7 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+# Generated manifests runs/vc-data/train.jsonl and runs/vc-data/val.jsonl are covered here.
 runs/
 data/
 checkpoints/

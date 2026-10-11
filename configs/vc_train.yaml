@@ -1,0 +1,31 @@
+# Pilot settings, not a validated final 6000h training schedule.
+data:
+  segment_duration: 2.4
+  max_val_duration: 12.0
+  max_reference_duration: 6.0
+  reconstruction_ratio: 0.2
+  reversed_ratio: 0.4
+  mask_target_condition: true
+  volume_normalize: true
+  highpass_cutoff_freq: 40.0
+converter:
+  condition_dim: 192
+  channels: 256
+  dilations: [1, 2, 4, 8, 16, 32]
+  reference_mels: 80
+loss:
+  dyn: 1.0
+  edit: 1.0
+  paired_reconstruction: 1.0
+  natural_reconstruction: 1.0
+training:
+  converter_learning_rate: 0.0001
+  decoder_learning_rate: 0.00002
+  weight_decay: 0.0001
+  gradient_clip: 5.0
+  amp: bf16
+  seed: 1
+  max_steps: 10000
+  log_interval: 20
+  save_interval: 1000
+  val_interval: 1000

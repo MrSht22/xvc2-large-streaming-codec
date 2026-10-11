@@ -1,0 +1,8 @@
+# X-VC sampling defaults adapted to 16 kHz / 50 Hz continuous Codec latents.
+segment_duration: 2.4
+max_val_duration: 12.0
+reconstruction_ratio: 0.2
+reversed_ratio: 0.4
+mask_target_condition: true
+volume_normalize: true
+highpass_cutoff_freq: 40.0
