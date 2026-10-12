@@ -86,12 +86,20 @@ class VCPairDataset(Dataset):
     This assumes that source and target already share a content/time axis.
     """
 
-    def __init__(self, manifest: Path, config: VCPairDataConfig, random_crop: bool = True) -> None:
+    def __init__(
+        self,
+        manifest: Path,
+        config: VCPairDataConfig,
+        random_crop: bool = True,
+        *,
+        include_pair_conditions: bool = True,
+    ) -> None:
         self.rows = read_jsonl(manifest)
         if not self.rows:
             raise ValueError(f"Empty VC manifest: {manifest}")
         self.config = config
         self.random_crop = random_crop
+        self.include_pair_conditions = include_pair_conditions
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -138,10 +146,17 @@ class VCPairDataset(Dataset):
         source = source[:, : available * HOP_LENGTH]
         target = target[:, : available * HOP_LENGTH]
         natural = source if role == "reversed" else target
-        source_condition, target_condition = source.clone(), target.clone()
-        if self.config.mask_target_condition:
-            source_condition[:, start:stop] = 0
-            target_condition[:, start:stop] = 0
+        pair_conditions = {}
+        if self.include_pair_conditions:
+            source_condition, target_condition = source.clone(), target.clone()
+            if self.config.mask_target_condition:
+                source_condition[:, start:stop] = 0
+                target_condition[:, start:stop] = 0
+            pair_conditions = {
+                "source_wav_cond": source_condition,
+                "target_wav_cond": target_condition,
+                "condition_frames": available,
+            }
 
         views = {}
         for name, waveform in (("source", source), ("target", target)):
@@ -183,9 +198,7 @@ class VCPairDataset(Dataset):
             "start_frame": start_frame,
             "source_num_samples": source_samples,
             "target_num_samples": target_samples,
-            "condition_frames": available,
-            "source_wav_cond": source_condition,
-            "target_wav_cond": target_condition,
+            **pair_conditions,
             "reference_waveform": reference,
             "reference_samples": reference.shape[-1],
             "reference_kind": reference_kind,
@@ -220,11 +233,14 @@ class VCPairDataset(Dataset):
                 "frames": torch.tensor([row[name]["frames"] for row in rows]),
             }
         for key in ("source_wav_cond", "target_wav_cond", "reference_waveform"):
+            if key not in rows[0]:
+                continue
             samples = max(row[key].shape[-1] for row in rows)
             result[key] = torch.stack(
                 [F.pad(row[key], (0, samples - row[key].shape[-1])) for row in rows]
             )
-        result["condition_frames"] = torch.tensor([row["condition_frames"] for row in rows])
+        if "condition_frames" in rows[0]:
+            result["condition_frames"] = torch.tensor([row["condition_frames"] for row in rows])
         result["reference_samples"] = torch.tensor([row["reference_samples"] for row in rows])
         return result
 

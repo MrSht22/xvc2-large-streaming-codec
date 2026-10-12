@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import torch
@@ -41,24 +42,36 @@ class ReferenceFrontend(torch.nn.Module):
 
     @torch.no_grad()
     def forward(self, waveform: torch.Tensor, lengths: torch.Tensor):
-        if (lengths < 8000).any():
+        sample_lengths = lengths.tolist()
+        if min(sample_lengths) < 8000:
             raise ValueError(
                 "Reference has less than 0.5s outside the supervised crop. "
                 "Provide target_reference_wav_path (and source_reference_wav_path for reverse), "
                 "preferably a 2-6s same-speaker different-utterance reference."
             )
-        embeddings, mels = [], []
+        embeddings, mels = [None] * len(sample_lengths), [None] * len(sample_lengths)
+        groups = defaultdict(list)
+        for index, length in enumerate(sample_lengths):
+            groups[length].append(index)
         # Trim before ERes2Net pooling and Mel extraction: batch padding is not a reference.
-        for index, length in enumerate(lengths.tolist()):
-            audio = waveform[index, 0, :length].float()
-            if not torch.isfinite(audio).all() or audio.abs().max() < 1e-6:
-                raise ValueError("Reference audio is silent or nonfinite")
-            output = self.speaker_encoder(audio[None])
+        valid = (
+            torch.arange(waveform.shape[-1], device=waveform.device)[None]
+            < lengths.to(waveform.device, non_blocking=True)[:, None]
+        )
+        audio = waveform[:, 0].float().masked_fill(~valid, 0)
+        if not (torch.isfinite(audio).all() & (audio.abs().amax(-1) >= 1e-6).all()):
+            raise ValueError("Reference audio is silent or nonfinite")
+        # Equal-length references (especially the 6s cap) share one frozen model forward.
+        for length, indices in groups.items():
+            audio = waveform[indices, 0, :length].float()
+            output = self.speaker_encoder(audio)
             embedding = output[0] if isinstance(output, tuple) else output
-            embeddings.append(embedding[0])
-            mels.append(self.mel(audio).clamp_min(1e-5).log())
-        mel_lengths = torch.tensor([mel.shape[-1] for mel in mels], device=waveform.device)
-        maximum = int(mel_lengths.max())
+            mel = self.mel(audio).clamp_min(1e-5).log()
+            for position, index in enumerate(indices):
+                embeddings[index], mels[index] = embedding[position], mel[position]
+        mel_sizes = [mel.shape[-1] for mel in mels]
+        mel_lengths = torch.tensor(mel_sizes, device=waveform.device)
+        maximum = max(mel_sizes)
         return (
             torch.stack(embeddings),
             torch.stack([F.pad(mel, (0, maximum - mel.shape[-1])) for mel in mels]),

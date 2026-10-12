@@ -6,6 +6,7 @@ import argparse
 import json
 import random
 import time
+from itertools import islice
 from pathlib import Path
 
 import torch
@@ -47,6 +48,26 @@ class SeededVCPairDataset(VCPairDataset):
         with torch.random.fork_rng(devices=[]):
             torch.random.default_generator.manual_seed(self.seed + self.epoch * len(self) + index)
             return super().__getitem__(index)
+
+
+class CursorDistributedSampler(DistributedSampler):
+    """Resume at a per-rank sample cursor without decoding consumed batches."""
+
+    sample_offset = 0
+
+    def __iter__(self):
+        return islice(super().__iter__(), self.sample_offset, None)
+
+    def __len__(self):
+        return max(0, super().__len__() - self.sample_offset)
+
+
+def move_vc_batch(batch, device, stage):
+    # Reference lengths remain on CPU for grouping; full paired conditions are unused.
+    names = {"source", "target", "reference_waveform"}
+    if stage == "decoder":
+        names.add("natural")
+    return {key: move(value, device) if key in names else value for key, value in batch.items()}
 
 
 def build_training_loader(dataset, sampler, batch_size, num_workers, prefetch_factor, device):
@@ -165,7 +186,7 @@ def validate(model, loader, device, reconstruction, weights, output_dir, audio_e
     totals, count = {}, 0
     output_dir.mkdir(parents=True, exist_ok=True)
     for batch in loader:
-        batch = move(batch, device)
+        batch = move_vc_batch(batch, device, model.vc.training_stage)
         paired = model(batch)
         _, metrics = compute_losses(paired, batch, reconstruction, weights)
         size = batch["source"]["waveform"].shape[0]
@@ -289,9 +310,11 @@ def main():
     random.seed(training["seed"] + rank)
     torch.manual_seed(training["seed"] + rank)
     data_config = VCPairDataConfig(**config["data"])
-    dataset = SeededVCPairDataset(args.train_manifest, data_config)
+    dataset = SeededVCPairDataset(args.train_manifest, data_config, include_pair_conditions=False)
     dataset.seed = training["seed"]
-    validation = VCPairDataset(args.val_manifest, data_config, random_crop=False)
+    validation = VCPairDataset(
+        args.val_manifest, data_config, random_crop=False, include_pair_conditions=False
+    )
     # All generated variants of one natural utterance must stay in one split.
     for key in ("target_utt", "target_wav_path"):
         if {row[key] for row in dataset.rows} & {row[key] for row in validation.rows}:
@@ -351,8 +374,13 @@ def main():
     end = step + args.steps if args.steps else training["max_steps"]
     if end <= step:
         raise ValueError("No steps remaining; use --steps for an explicit extension")
-    sampler = DistributedSampler(
+    sampler = CursorDistributedSampler(
         dataset, num_replicas=world_size, rank=rank, seed=training["seed"], drop_last=False
+    )
+    sample_offset = (
+        min(payload.get("sample_offset", offset * payload["data"]["batch_size"]), len(sampler))
+        if args.resume
+        else 0
     )
     loader = build_training_loader(
         dataset, sampler, args.batch_size, args.num_workers, args.prefetch_factor, device
@@ -372,6 +400,11 @@ def main():
             json.dumps(
                 {
                     "stage": args.stage,
+                    "step": step,
+                    "end_step": end,
+                    "batch_size_per_rank": args.batch_size,
+                    "global_batch_size": args.batch_size * world_size,
+                    "sample_offset_per_rank": sample_offset,
                     "base": base,
                     "loader": {
                         "num_workers_per_rank": args.num_workers,
@@ -389,14 +422,12 @@ def main():
     interval_seconds, interval_data_wait, interval_samples, interval_steps = 0.0, 0.0, 0, 0
     while step < end:
         sampler.set_epoch(epoch)
+        sampler.sample_offset = sample_offset
         dataset.epoch = epoch
         previous_end = time.perf_counter()
-        for batch_index, batch in enumerate(loader):
+        for batch in loader:
             data_wait = time.perf_counter() - previous_end
-            if batch_index < offset:
-                previous_end = time.perf_counter()
-                continue
-            batch = move(batch, device)
+            batch = move_vc_batch(batch, device, args.stage)
             optimizer.zero_grad(set_to_none=True)
             with torch.autocast(device.type, dtype=dtype, enabled=use_amp):
                 paired = wrapped(batch)
@@ -409,7 +440,8 @@ def main():
             scaler.step(optimizer)
             scaler.update()
             step += 1
-            offset = batch_index + 1
+            sample_offset += batch["source"]["waveform"].shape[0]
+            offset += 1
             logging_step = step == 1 or step % training["log_interval"] == 0
             if logging_step and device.type == "cuda":
                 torch.cuda.synchronize(device)
@@ -484,6 +516,7 @@ def main():
                     step=step,
                     epoch=epoch,
                     offset=offset,
+                    sample_offset=sample_offset,
                     stage=args.stage,
                     base=base,
                     config=config,
@@ -499,6 +532,7 @@ def main():
         if step < end:
             epoch += 1
             offset = 0
+            sample_offset = 0
     if world_size > 1:
         dist.barrier()
         dist.destroy_process_group()

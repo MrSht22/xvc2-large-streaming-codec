@@ -15,10 +15,12 @@ from xvc2_codec.vc_condition import ReferenceFrontend
 from xvc2_codec.vc_data import VCPairDataConfig, VCPairDataset
 from xvc2_codec.vc_infer import convert_stream
 from xvc2_codec.vc_train import (
+    CursorDistributedSampler,
     SeededVCPairDataset,
     build_optimizer,
     build_training_loader,
     compute_losses,
+    move_vc_batch,
     restore_vc,
     valid_reconstruction_loss,
     vc_state,
@@ -166,6 +168,35 @@ def test_reference_frontend_excludes_batch_padding_and_freezes_speaker():
         frontend(torch.zeros_like(first), torch.tensor([8000]))
 
 
+def test_reference_frontend_batches_equal_lengths_without_reordering_or_reading_padding():
+    class CountingSpeaker(TinySpeaker):
+        def __init__(self):
+            super().__init__()
+            self.batch_sizes = []
+
+        def forward(self, audio):
+            self.batch_sizes.append(audio.shape[0])
+            return super().forward(audio), audio.mean(-1)
+
+    frontend = ReferenceFrontend(CountingSpeaker())
+    lengths = torch.tensor([9600, 8000, 9600, 12800])
+    audio = torch.randn(4, 1, 12800)
+    for index, length in enumerate(lengths):
+        audio[index, :, length:] = float("nan")
+    embeddings, mels, mel_lengths = frontend(audio, lengths)
+    assert frontend.speaker_encoder.batch_sizes == [2, 1, 1]
+    for index, length in enumerate(lengths):
+        embedding, mel, frames = frontend(
+            audio[index : index + 1, :, :length], lengths[index : index + 1]
+        )
+        torch.testing.assert_close(embeddings[index : index + 1], embedding)
+        torch.testing.assert_close(mels[index : index + 1, :, : frames[0]], mel)
+        assert mel_lengths[index] == frames[0]
+    audio[2, :, : lengths[2]] = 0
+    with pytest.raises(ValueError, match="silent"):
+        frontend(audio, lengths)
+
+
 def test_short_audio_reconstruction_loss_cannot_read_batch_padding():
     lengths = torch.tensor([320, 1600])
     predicted, target = torch.randn(2, 1, 1600), torch.randn(2, 1, 1600)
@@ -297,6 +328,68 @@ def test_training_cli_checkpoint_resume_and_decoder_transition(tmp_path, monkeyp
     direct = torch.load(uninterrupted / "step-000004.pt", weights_only=False)
     for name, value in resumed["vc"]["converter"].items():
         torch.testing.assert_close(value, direct["vc"]["converter"][name], rtol=0, atol=0)
+    with pytest.raises(ValueError, match="batch/world size differs"):
+        run(
+            [
+                "--output-dir",
+                str(tmp_path / "rejected"),
+                "--resume",
+                str(checkpoint),
+                "--batch-size",
+                "2",
+                "--steps",
+                "1",
+            ]
+        )
+    # Old checkpoints have only a batch cursor; convert it using the old batch size.
+    legacy = torch.load(checkpoint, weights_only=False)
+    legacy.pop("sample_offset")
+    legacy_path = tmp_path / "legacy.pt"
+    torch.save(legacy, legacy_path)
+    consumed = []
+    original_getitem = SeededVCPairDataset.__getitem__
+
+    def record_item(dataset, index):
+        consumed.append((dataset.epoch, index))
+        return original_getitem(dataset, index)
+
+    monkeypatch.setattr(SeededVCPairDataset, "__getitem__", record_item)
+    legacy_resume = tmp_path / "legacy_resume"
+    run(
+        [
+            "--output-dir",
+            str(legacy_resume),
+            "--resume",
+            str(legacy_path),
+            "--steps",
+            "2",
+        ]
+    )
+    restored = torch.load(legacy_resume / "step-000004.pt", weights_only=False)
+    expected_sampler = DistributedSampler(range(3), num_replicas=1, rank=0, seed=1)
+    first_epoch = list(expected_sampler)
+    expected_sampler.set_epoch(1)
+    assert consumed == [(0, first_epoch[2]), (1, next(iter(expected_sampler)))]
+    assert restored["step"] == 4 and restored["sample_offset"] == 1 and restored["epoch"] == 1
+    assert all(int(state["step"]) == 4 for state in restored["optimizer"]["state"].values())
+    for name, value in restored["vc"]["converter"].items():
+        torch.testing.assert_close(value, direct["vc"]["converter"][name], rtol=0, atol=0)
+    for name, value in restored["vc"]["decoder"].items():
+        torch.testing.assert_close(value, legacy["vc"]["decoder"][name], rtol=0, atol=0)
+    consumed.clear()
+    run(
+        [
+            "--output-dir",
+            str(legacy_resume),
+            "--resume",
+            str(legacy_resume / "step-000004.pt"),
+            "--steps",
+            "1",
+        ]
+    )
+    assert consumed == [(1, list(expected_sampler)[1])]
+    again = torch.load(legacy_resume / "step-000005.pt", weights_only=False)
+    assert again["step"] == 5 and again["sample_offset"] == 2
     adapted = tmp_path / "decoder"
     run(
         [
@@ -317,6 +410,63 @@ def test_training_cli_checkpoint_resume_and_decoder_transition(tmp_path, monkeyp
         (adapted / "validation-000001/metrics.json").read_text()
     )
     assert all(not key.startswith("student") for key in payload["vc"])
+
+
+def test_sample_cursor_preserves_each_rank_order_without_replaying_consumed_items():
+    for rank in (0, 1):
+        sampler = CursorDistributedSampler(range(11), num_replicas=2, rank=rank, seed=42)
+        for epoch in (0, 1):
+            sampler.sample_offset = 0
+            sampler.set_epoch(epoch)
+            full = list(sampler)
+            # Consuming a batch of two starts the next iterator at exactly sample2.
+            sampler.sample_offset = 2
+            assert list(sampler) == full[2:] and len(sampler) == len(full) - 2
+            sampler.sample_offset = len(full)
+            assert list(sampler) == [] and len(sampler) == 0
+
+
+@pytest.mark.parametrize("independent", [True, False])
+def test_training_omits_legacy_conditions_without_changing_roles_crops_or_references(
+    tmp_path, independent
+):
+    train, _ = make_training_data(tmp_path)
+    if not independent:
+        rows = [json.loads(line) for line in train.read_text().splitlines()]
+        for row in rows:
+            row.pop("source_reference_wav_path")
+            row.pop("target_reference_wav_path")
+        train.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    config = VCPairDataConfig(segment_duration=0.12, volume_normalize=False, highpass_cutoff_freq=0)
+    original = SeededVCPairDataset(train, config)
+    compact = SeededVCPairDataset(train, config, include_pair_conditions=False)
+    for epoch in (0, 1):
+        original.epoch = compact.epoch = epoch
+        full = original.collate([original[index] for index in range(len(original))])
+        trimmed = compact.collate([compact[index] for index in range(len(compact))])
+        assert not {"source_wav_cond", "target_wav_cond", "condition_frames"} & trimmed.keys()
+        for key, value in trimmed.items():
+            if isinstance(value, dict):
+                for name, tensor in value.items():
+                    torch.testing.assert_close(tensor, full[key][name], rtol=0, atol=0)
+            elif torch.is_tensor(value):
+                torch.testing.assert_close(value, full[key], rtol=0, atol=0)
+            else:
+                assert value == full[key]
+
+
+def test_training_transfer_keeps_reference_lengths_and_unused_natural_crop_on_cpu():
+    batch = paired_batch()
+    batch.update(
+        reference_waveform=torch.randn(2, 1, 9600), reference_samples=torch.tensor([9600, 8000])
+    )
+    converted = move_vc_batch(batch, torch.device("meta"), "converter")
+    assert converted["source"]["waveform"].device.type == "meta"
+    assert converted["reference_waveform"].device.type == "meta"
+    assert converted["reference_samples"] is batch["reference_samples"]
+    assert converted["natural"] is batch["natural"]
+    adapted = move_vc_batch(batch, torch.device("meta"), "decoder")
+    assert adapted["natural"]["waveform"].device.type == "meta"
 
 
 def test_persistent_workers_observe_epoch_and_match_zero_worker_sampling(tmp_path):

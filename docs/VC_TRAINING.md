@@ -9,10 +9,84 @@ Student、KeepHead、AcousticEncoder、Fusion 在两个阶段都冻结，latent 
 | `converter` | Converter，包括 reference encoder/attention | `1e-4` | Decoder 冻结 |
 | `decoder` | Converter + 整个 Decoder | `1e-4` / `2e-5` | 每个 batch 都加入 |
 
-第一阶段拿到短训基线后，第二阶段从该 VC checkpoint 初始化，建立新的 optimizer 和阶段内 step。
+第一阶段应先在固定 Decoder 下验证转换收益；不要仅因达到 10k 就切换第二阶段。
+第二阶段从该 VC checkpoint 初始化，建立新的 optimizer 和阶段内 step。
 `--resume` 才是同阶段续训：恢复 optimizer、AMP scaler、epoch 和 batch cursor。
-配置、数据路径、batch size、world size、基座 checkpoint 必须一致。角色/crop 的随机采样按
-epoch/item 确定，可重放 cursor；多 GPU 使用 DistributedSampler。不要训练中切换到新的 Codec。
+配置、数据路径、batch size、world size、基座 checkpoint 必须一致。
+新 checkpoint 保存每卡已消费样本数；旧 checkpoint 用原 batch size 和 batch cursor 换算。
+sampler 从该样本位置开始，不重新读取已经消费的音频。
+角色/crop 的随机采样按 epoch/item 确定。
+不要训练中切换到新的 Codec。
+
+## 从零训练 Converter 100k（两卡、每卡 batch24）
+
+先在服务器拉取代码，保留原训练环境中的 `XVC_ROOT` 和 `SPEAKER_DIR`。以下沿用原先的
+step500000 Codec、Student 和 train/val。Converter/reference encoder/attention 从头训练；
+整个 Codec 和 Student 始终冻结，不载入之前的 VC checkpoint。
+
+```bash
+export ROOT=/inspire/hdd2/project/multilingualspeechrecognition/chenxie-25019/qixiangxu/X-VC2
+export CODEC="$ROOT/xvc2-large-streaming-codec"
+export STUDENT="$ROOT/xvc2-large-streaming-student"
+export PYTHONPATH="$CODEC/src:$STUDENT/src"
+export CUDA_VISIBLE_DEVICES=0,1
+export VC_CONFIG="$CODEC/runs/vc-configs/vc_converter_100k_2gpu_b24.yaml"
+
+# XVC_ROOT: 原训练使用的 X-VC checkout；SPEAKER_DIR: 原 ERes2Net 权重目录。
+: "${XVC_ROOT:?请先设置为原训练的 X-VC checkout 路径}"
+: "${SPEAKER_DIR:?请先设置为原训练的 ERes2Net 权重目录}"
+
+cd "$CODEC"
+git pull --ff-only
+
+python - <<'PY'
+import os
+from pathlib import Path
+import yaml
+
+config = yaml.safe_load(Path("configs/vc_train.yaml").read_text())
+config["training"].update(max_steps=100000, save_interval=5000)
+destination = Path(os.environ["VC_CONFIG"])
+destination.parent.mkdir(parents=True, exist_ok=True)
+destination.write_text(yaml.safe_dump(config, sort_keys=False))
+PY
+
+torchrun --standalone --nproc_per_node=2 -m xvc2_codec.vc_train \
+  --config "$VC_CONFIG" \
+  --codec-config configs/codec_63m_quality.yaml \
+  --codec-checkpoint "$CODEC/runs/codec-63m-disentangled-v2/step-500000.pt" \
+  --student-checkpoint "$STUDENT/runs/student-12x768-2500h-extension-1epoch-v1/step-053168.pt" \
+  --weights ema \
+  --xvc-root "$XVC_ROOT" --speaker-model-dir "$SPEAKER_DIR" \
+  --train-manifest "$CODEC/runs/vc-data/train.jsonl" \
+  --val-manifest "$CODEC/runs/vc-data/val.jsonl" \
+  --stage converter \
+  --batch-size 24 --steps 100000 \
+  --num-workers 4 --prefetch-factor 4 \
+  --val-pairs 32 --audio-examples 4 \
+  --output-dir runs/vc-converter-100k-2gpu-b24-fresh
+```
+
+最终文件是 `runs/vc-converter-100k-2gpu-b24-fresh/step-100000.pt`。
+两卡 global batch48，Converter 学习率沿用 `1e-4`；保存间隔 5000、验证间隔 1000。
+不传 `--resume` 或 `--initialize-vc`。中断后同 batch 续训才使用 `--resume`；
+此时 `--steps` 是新增更新数，例如 step30000 后传 `--steps 70000`，到累计 100000。
+续训时使用该运行保存的 `config.yaml`，不要重新生成不同的配置。
+
+## 训练吞吐
+
+- 相同有效时长的 reference 合并运行冻结 ERes2Net 和 Mel；不同长度仍分别裁剪，避免把 padding 池化成音色。
+  大量 reference 达到 6s 上限时收益更明显；X-VC 的 FBank 内部仍按样本提取。
+- VC trainer 不构造、预取或传输未使用的整句 `source_wav_cond/target_wav_cond`；reference 定义不变。
+  Converter 阶段也不将未使用的 `natural` crop 搬到 GPU。IO 检查工具保留历史条件字段。
+- `num-workers` 按每卡计；4 workers × 2 卡共 8 个进程，prefetch4 为每卡最多 16 个预取 batch。
+  保留 persistent workers、pinned memory 和 nonblocking 传输。若数据等待占比高且 CPU/存储允许，可试每卡 8 workers。
+- 日志中的 `global_pairs_per_second` 衡量吞吐，`mean_data_wait_seconds_by_rank` 和
+  `mean_step_seconds_by_rank` 用于区分输入等待和训练开销；40% 显存占用本身不是 GPU 利用率。
+- validation 仍每 1000 步仅在 rank0 上运行，另一卡等待；此时的单卡低 util 属于预期。
+  日志吞吐排除显式验证、保存和日志通信时间，因此还需观察整个运行的总耗时。
+
+以上优化不代表已在服务器 GPU 上测得加速比例；用同一设备比较修改前后的吞吐和数据等待。
 
 ## 输入与参考
 
