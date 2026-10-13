@@ -6,3 +6,5 @@
 /inspire/hdd/global_public/public_datas/speech/LibriSpeech/train-other-500/377/129290/377-129290-0009.flac
 # libsndfile cannot seek reliably in this LibriSpeech FLAC during random crop loading.
 /inspire/hdd/global_public/public_datas/speech/LibriSpeech/train-clean-100/4441/76263/4441-76263-0036.flac
+# libsndfile cannot seek reliably in this LibriLight FLAC during random crop loading.
+/inspire/hdd/global_public/public_datas/speech/LibriLight/vad/medium/2122/1654/davidelginbrod_48_macdonald_64kb_0009.flac
